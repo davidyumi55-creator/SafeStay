@@ -320,6 +320,8 @@ async function initApp() {
 function showLoginScreen() {
   document.getElementById("loginScreen").classList.remove("hidden");
   document.getElementById("appShell").classList.add("hidden");
+  const mobNav = document.getElementById("mobileBottomNav");
+  if (mobNav) mobNav.classList.add("hidden");
   if (eventSource) {
     eventSource.close();
     eventSource = null;
@@ -355,13 +357,22 @@ async function handleLogout() {
 }
 
 let activeTabId = "dashboardTab";
+let alertSoundEnabled = localStorage.getItem("safestay_sound") !== "off";
+let lastRedCount = 0;
 
 function onAuthenticated(initialState) {
   state = initialState;
+  lastRedCount = (state.rooms || []).filter(r => r.status === "RED").length;
   cacheOfflineState(state);
+
+  if (localStorage.getItem("safestay_large_text") === "on") {
+    document.body.classList.add("large-text");
+  }
+  updateSoundButtonUI();
 
   document.getElementById("loginScreen").classList.add("hidden");
   document.getElementById("appShell").classList.remove("hidden");
+  document.getElementById("mobileBottomNav").classList.remove("hidden");
 
   activeTabId = "dashboardTab";
   renderAll();
@@ -396,7 +407,11 @@ function connectRealTimeSync() {
   });
 
   eventSource.addEventListener("state_updated", async () => {
-    await refreshState();
+    await refreshState(true);
+  });
+
+  eventSource.addEventListener("clients_changed", async () => {
+    await refreshState(false);
   });
 
   eventSource.onerror = () => {
@@ -409,8 +424,10 @@ function setSyncStatus(mode) {
   if (!el) return;
   if (mode === "live" || mode === true) {
     const isPg = state && state.serverInfo && state.serverInfo.dbMode === "postgresql";
+    const devices = state && state.serverInfo && state.serverInfo.connectedClients ? state.serverInfo.connectedClients : 1;
+    const deviceLabel = devices > 1 ? ` &bull; ${devices} online` : "";
     el.className = "sync-badge sync-live";
-    el.innerHTML = isPg ? "&#9679; LIVE SYNC (PostgreSQL)" : "&#9679; LIVE SYNC";
+    el.innerHTML = (isPg ? "&#9679; LIVE SYNC (PostgreSQL)" : "&#9679; LIVE SYNC") + deviceLabel;
   } else if (mode === "local") {
     el.className = "sync-badge sync-local";
     el.innerHTML = "&#9679; LOCAL MODE";
@@ -420,14 +437,22 @@ function setSyncStatus(mode) {
   }
 }
 
-async function refreshState() {
+async function refreshState(checkAlert = false) {
   try {
     state = await api("/api/state");
     cacheOfflineState(state);
-    setSyncStatus(true);
+    setSyncStatus(isLocalMode ? "local" : "live");
+
+    const newRedCount = (state.rooms || []).filter(r => r.status === "RED").length;
+    if (checkAlert && newRedCount > lastRedCount) {
+      playRedAlertChime();
+      showToast("URGENT: New RED unresolved escalation reported!");
+    }
+    lastRedCount = newRedCount;
+
     renderAll();
   } catch {
-    setSyncStatus(false);
+    setSyncStatus("offline");
   }
 }
 
@@ -471,7 +496,27 @@ function navigateTo(tabId) {
   }
 
   renderSidebarNav();
+  renderMobileBottomNav();
   toggleSidebar(false);
+}
+
+function renderMobileBottomNav() {
+  const bar = document.getElementById("mobileBottomNav");
+  if (!bar || !state) return;
+  const cfg = getRoleConfig(state.user.role);
+  const top3 = cfg.nav.slice(0, 3);
+
+  bar.innerHTML = top3.map(item => `
+    <button class="mob-nav-btn ${item.id === activeTabId ? "active" : ""}" onclick="navigateTo('${item.id}')">
+      <span class="mob-icon">${item.icon}</span>
+      <span>${item.label.split(" ")[0]}</span>
+    </button>
+  `).join("") + `
+    <button class="mob-nav-btn" onclick="toggleSidebar(true)">
+      <span class="mob-icon">&#9776;</span>
+      <span>Menu</span>
+    </button>
+  `;
 }
 
 function toggleSidebar(open) {
@@ -490,7 +535,7 @@ function setBoardView(view) {
 }
 
 function printSection(mode) {
-  document.body.classList.remove("print-mode-backup", "print-mode-qr", "print-mode-cards");
+  document.body.classList.remove("print-mode-backup", "print-mode-qr", "print-mode-cards", "print-mode-brief");
   document.body.classList.add(`print-mode-${mode}`);
   updatePrintHeader();
   window.print();
@@ -1021,11 +1066,187 @@ function openQuickEditModal(roomNumber) {
   if (!room) return;
   document.getElementById("quickEditTitle").textContent = `Update Floor ${room.floor} — Room ${room.room}`;
   document.getElementById("quickRoomNumber").value = room.room;
-  document.getElementById("quickStatus").value = room.status;
+  selectQuickStatus(room.status);
   document.getElementById("quickExpected").value = room.expected;
   document.getElementById("quickConfirmed").value = room.confirmed;
   document.getElementById("quickNote").value = room.note;
   document.getElementById("quickEditModal").classList.remove("hidden");
+}
+
+function selectQuickStatus(status) {
+  document.getElementById("quickStatus").value = status;
+  ["GREEN", "YELLOW", "RED"].forEach(s => {
+    const btn = document.getElementById(`pick${s}`);
+    if (btn) btn.classList.toggle("selected", s === status);
+  });
+}
+
+// =========================================================
+// RESPONDER HANDOFF BRIEF, ALERT CHIME & ACCESSIBILITY
+// =========================================================
+
+function buildResponderBriefText() {
+  const inc = state.activeIncident;
+  const expected = state.rooms.reduce((s, r) => s + Number(r.expected), 0);
+  const confirmed = state.rooms.reduce((s, r) => s + Number(r.confirmed), 0);
+  const missing = Math.max(0, expected - confirmed);
+  const redRooms = state.rooms.filter(r => r.status === "RED");
+  const pendingAssist = (state.assistance || []).filter(a => a.status !== "Assisted at Assembly");
+
+  const lines = [
+    `SAFE-STAY EMERGENCY RESPONDER BRIEFING`,
+    `Establishment: ${state.hotel.name} (${state.hotel.address || "N/A"})`,
+    `Incident: ${inc.active ? `${inc.title} (${inc.type})` : "Normal Operations"}`,
+    `Assembly Area: ${inc.assemblyArea || state.hotel.assemblyArea}`,
+    `Time Generated: ${new Date().toLocaleString()}`,
+    `----------------------------------------`,
+    `GUEST ACCOUNTABILITY SUMMARY:`,
+    `- Occupied Rooms: ${state.rooms.length}`,
+    `- Registered Guests: ${expected}`,
+    `- Confirmed at Assembly: ${confirmed}`,
+    `- UNACCOUNTED GUESTS: ${missing}`,
+    `----------------------------------------`,
+    `UNRESOLVED (RED) ROOMS (${redRooms.length}):`
+  ];
+
+  if (redRooms.length === 0) {
+    lines.push("  None reported.");
+  } else {
+    redRooms.forEach(r => {
+      const rmMissing = Math.max(0, r.expected - r.confirmed);
+      lines.push(`  * Floor ${r.floor} Room ${r.room}: ${rmMissing} unaccounted (${r.confirmed}/${r.expected}) - ${r.note} [${r.updatedAt}]`);
+    });
+  }
+
+  if (state.user.canViewAssistance && pendingAssist.length > 0) {
+    lines.push(`----------------------------------------`);
+    lines.push(`RESTRICTED GUEST ASSISTANCE NEEDS (${pendingAssist.length} Pending):`);
+    pendingAssist.forEach(a => {
+      lines.push(`  * Room ${a.room}: ${a.type} (Assigned: ${a.role}) - ${a.notes}`);
+    });
+  }
+
+  lines.push(`----------------------------------------`);
+  lines.push(`SAFETY NOTICE: Hotel staff must NOT independently re-enter the building.`);
+  return lines.join("\n");
+}
+
+function openResponderBrief() {
+  if (!state) return;
+  const inc = state.activeIncident;
+  const expected = state.rooms.reduce((s, r) => s + Number(r.expected), 0);
+  const confirmed = state.rooms.reduce((s, r) => s + Number(r.confirmed), 0);
+  const missing = Math.max(0, expected - confirmed);
+  const redRooms = state.rooms.filter(r => r.status === "RED");
+  const pendingAssist = (state.assistance || []).filter(a => a.status !== "Assisted at Assembly");
+
+  const body = document.getElementById("responderBriefBody");
+  body.innerHTML = `
+    <div>
+      <strong>${escapeHTML(state.hotel.name)}</strong> &mdash; ${escapeHTML(state.hotel.address || "")}<br />
+      <strong>Incident:</strong> ${escapeHTML(inc.active ? `${inc.title} (${inc.type})` : "Normal Operations")} &bull;
+      <strong>Assembly Area:</strong> ${escapeHTML(inc.assemblyArea || state.hotel.assemblyArea)}<br />
+      <strong>Prepared:</strong> ${new Date().toLocaleString()} by ${escapeHTML(state.user.name)} (${escapeHTML(state.user.role)})
+    </div>
+
+    <div class="brief-section">
+      <h4>Guest Accountability Summary</h4>
+      <div>
+        Registered: <strong>${expected}</strong> &nbsp;|&nbsp;
+        Confirmed at Assembly: <strong class="text-green">${confirmed}</strong> &nbsp;|&nbsp;
+        Unaccounted: <strong class="${missing > 0 ? "text-red" : "text-green"}">${missing}</strong>
+      </div>
+    </div>
+
+    <div class="brief-section">
+      <h4>Unresolved (RED) Rooms &mdash; Priority for Responders (${redRooms.length})</h4>
+      ${redRooms.length === 0
+        ? `<p class="text-green"><strong>No unresolved (RED) rooms currently reported.</strong></p>`
+        : `<div class="brief-red-box">
+            ${redRooms.map(r => `
+              <div style="margin-bottom:6px;">
+                <strong>Floor ${r.floor} &bull; Room ${escapeHTML(r.room)}</strong>
+                (${r.confirmed}/${r.expected} confirmed, ${Math.max(0, r.expected - r.confirmed)} unaccounted) &mdash;
+                ${escapeHTML(r.note)} <span class="muted">[${escapeHTML(r.updatedAt)}]</span>
+              </div>
+            `).join("")}
+          </div>`}
+    </div>
+
+    ${state.user.canViewAssistance ? `
+      <div class="brief-section">
+        <h4>Pending Special Assistance Needs (Confidential &mdash; ${pendingAssist.length})</h4>
+        ${pendingAssist.length === 0
+          ? `<p class="muted">No pending assistance cases.</p>`
+          : pendingAssist.map(a => `
+            <div style="margin-bottom:5px;">
+              <strong>Room ${escapeHTML(a.room)}</strong>: ${escapeHTML(a.type)} &mdash; <em>${escapeHTML(a.notes)}</em>
+            </div>
+          `).join("")}
+      </div>
+    ` : ""}
+
+    <div class="brief-section">
+      <p class="muted"><strong>Safety Control (Proposal Sec. 16):</strong> Verified information handoff only. Hotel staff must NOT re-enter hazardous areas.</p>
+    </div>
+  `;
+
+  document.getElementById("responderBriefModal").classList.remove("hidden");
+}
+
+function closeResponderBrief() {
+  document.getElementById("responderBriefModal").classList.add("hidden");
+}
+
+async function copyResponderBrief() {
+  const text = buildResponderBriefText();
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast("Responder Briefing copied! Ready to paste in SMS / Viber / Messenger.");
+  } catch {
+    showToast("Could not auto-copy; use Print Responder Brief instead.");
+  }
+}
+
+function toggleAlertSound() {
+  alertSoundEnabled = !alertSoundEnabled;
+  localStorage.setItem("safestay_sound", alertSoundEnabled ? "on" : "off");
+  updateSoundButtonUI();
+  if (alertSoundEnabled) playRedAlertChime();
+  showToast(`RED Alert Sound ${alertSoundEnabled ? "enabled" : "muted"}.`);
+}
+
+function updateSoundButtonUI() {
+  const btn = document.getElementById("btnSoundToggle");
+  if (!btn) return;
+  btn.innerHTML = alertSoundEnabled ? "&#128276; Sound: ON" : "&#128263; Sound: OFF";
+}
+
+function playRedAlertChime() {
+  if (!alertSoundEnabled) return;
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    [880, 660].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.12, ctx.currentTime + i * 0.18);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.18 + 0.16);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + i * 0.18);
+      osc.stop(ctx.currentTime + i * 0.18 + 0.17);
+    });
+  } catch {}
+}
+
+function toggleLargeText() {
+  const isLarge = document.body.classList.toggle("large-text");
+  localStorage.setItem("safestay_large_text", isLarge ? "on" : "off");
+  showToast(isLarge ? "Large Text Emergency Mode ON." : "Standard text size restored.");
 }
 
 function closeQuickEditModal() {

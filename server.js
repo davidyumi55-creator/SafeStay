@@ -23,7 +23,8 @@ const ALLOWED_ROOT_FILES = new Set([
   "app.js",
   "roleDashboards.js",
   "qrcode.js",
-  "logo.jpg"
+  "logo.jpg",
+  "manifest.json"
 ]);
 
 // Roles aligned with Proposal Section 8
@@ -392,7 +393,11 @@ async function handleAPI(req, res, pathname) {
     });
     res.write(`event: connected\ndata: ${JSON.stringify({ ok: true })}\n\n`);
     sseClients.add(res);
-    req.on("close", () => sseClients.delete(res));
+    broadcastUpdate("clients_changed");
+    req.on("close", () => {
+      sseClients.delete(res);
+      broadcastUpdate("clients_changed");
+    });
     return;
   }
 

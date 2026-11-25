@@ -4,7 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SAFE-STAY | Hotel Emergency Guest Accountability &amp; Assistance System</title>
+  <meta name="theme-color" content="#0b2e1f" />
+  <link rel="manifest" href="manifest.json" />
   <link rel="icon" type="image/jpeg" href="logo.jpg" />
+  <link rel="apple-touch-icon" href="logo.jpg" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -104,8 +107,11 @@
           </div>
         </div>
         <div class="topbar-right">
-          <button class="btn btn-outline btn-small" onclick="exportToCSV()">Export CSV</button>
-          <button class="btn btn-outline btn-small" onclick="printSection('backup')">Print Backup</button>
+          <button class="btn btn-danger btn-small" onclick="openResponderBrief()" title="One-tap summary for Emergency Responders">Responder Brief</button>
+          <button id="btnSoundToggle" class="btn btn-outline btn-small" onclick="toggleAlertSound()" title="Toggle alert chime on RED escalations">&#128276; Sound: ON</button>
+          <button id="btnTextSize" class="btn btn-outline btn-small" onclick="toggleLargeText()" title="Enlarge text for emergency readability">Aa+</button>
+          <button class="btn btn-outline btn-small hide-xs" onclick="exportToCSV()">Export CSV</button>
+          <button class="btn btn-outline btn-small hide-xs" onclick="printSection('backup')">Print Backup</button>
         </div>
       </header>
 
@@ -574,20 +580,30 @@
     </div>
   </div>
 
-  <!-- QUICK ROOM UPDATE MODAL -->
+  <!-- QUICK ROOM UPDATE MODAL (One-Tap Stress-Friendly Status Buttons) -->
   <div id="quickEditModal" class="modal hidden no-print">
     <div class="modal-content">
       <h3 id="quickEditTitle">Update Room</h3>
-      <p class="muted" style="margin-bottom:12px;">Record safe, verified updates only. Never enter hazardous areas.</p>
+      <div class="safety-box-small" style="margin:8px 0 12px;">
+        <strong>Safe-Reporting Check:</strong> Submit only verified info from a safe location. Never enter hazardous areas.
+      </div>
       <form onsubmit="handleQuickEditSave(event)">
         <input type="hidden" id="quickRoomNumber" />
+        <input type="hidden" id="quickStatus" value="GREEN" />
+
         <div class="form-group">
-          <label for="quickStatus">Status Category</label>
-          <select id="quickStatus" required>
-            <option value="GREEN">GREEN &ndash; Verified / No Concern</option>
-            <option value="YELLOW">YELLOW &ndash; Pending / Not Verified</option>
-            <option value="RED">RED &ndash; Unresolved / Urgent</option>
-          </select>
+          <label>Tap Status Category</label>
+          <div class="status-picker">
+            <button type="button" id="pickGREEN" class="pick-btn pick-GREEN" onclick="selectQuickStatus('GREEN')">
+              <strong>GREEN</strong><span>Verified</span>
+            </button>
+            <button type="button" id="pickYELLOW" class="pick-btn pick-YELLOW" onclick="selectQuickStatus('YELLOW')">
+              <strong>YELLOW</strong><span>Pending</span>
+            </button>
+            <button type="button" id="pickRED" class="pick-btn pick-RED" onclick="selectQuickStatus('RED')">
+              <strong>RED</strong><span>Unresolved</span>
+            </button>
+          </div>
         </div>
         <div class="form-row">
           <div class="form-group">
@@ -694,6 +710,27 @@
       </form>
     </div>
   </div>
+
+  <!-- RESPONDER HANDOFF BRIEF MODAL (Proposal Section 7 & 14) -->
+  <div id="responderBriefModal" class="modal hidden">
+    <div class="modal-content modal-wide">
+      <div class="card-header-row no-print" style="margin-bottom:10px;">
+        <div>
+          <h3>Emergency Responder Handoff Briefing</h3>
+          <p class="muted">Verified accountability summary for BFP / responding authorities. Staff must NOT re-enter the building.</p>
+        </div>
+        <button class="btn btn-outline btn-small" onclick="closeResponderBrief()">Close</button>
+      </div>
+      <div id="responderBriefBody" class="brief-body"></div>
+      <div class="modal-actions no-print">
+        <button type="button" class="btn btn-outline" onclick="copyResponderBrief()">Copy Text for SMS / Chat</button>
+        <button type="button" class="btn btn-primary" onclick="printSection('brief')">Print Responder Brief</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MOBILE THUMB-FRIENDLY BOTTOM NAVIGATION (Phones <= 768px) -->
+  <nav id="mobileBottomNav" class="mobile-bottom-nav hidden no-print"></nav>
 
   <!-- TOAST NOTIFICATION -->
   <div id="toast" class="toast hidden"></div>

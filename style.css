@@ -893,6 +893,103 @@ input:focus, select:focus, textarea:focus {
 
 .toast { position: fixed; bottom: 20px; right: 20px; background: #0f172a; color: #fff; padding: 12px 18px; border-radius: 9px; font-size: 0.88rem; box-shadow: var(--shadow-md); z-index: 200; }
 
+/* ONE-TAP COLOR STATUS PICKER (Under-Stress Usability) */
+.status-picker {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.pick-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 6px;
+  border-radius: 10px;
+  border: 2px solid var(--border-strong);
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.14s ease;
+  min-height: 54px;
+}
+
+.pick-btn strong { font-size: 0.85rem; letter-spacing: 0.3px; }
+.pick-btn span { font-size: 0.72rem; opacity: 0.85; }
+
+.pick-GREEN { color: var(--green); border-color: #86efac; background: var(--green-soft); }
+.pick-YELLOW { color: var(--yellow); border-color: #fde047; background: var(--yellow-soft); }
+.pick-RED { color: var(--red); border-color: #fca5a5; background: var(--red-soft); }
+
+.pick-btn.selected.pick-GREEN { background: var(--green); color: #fff; border-color: #14532d; box-shadow: 0 3px 10px rgba(21, 128, 61, 0.35); }
+.pick-btn.selected.pick-YELLOW { background: #ca8a04; color: #fff; border-color: #854d0e; box-shadow: 0 3px 10px rgba(202, 138, 4, 0.35); }
+.pick-btn.selected.pick-RED { background: var(--red); color: #fff; border-color: #7f1d1d; box-shadow: 0 3px 10px rgba(185, 28, 28, 0.35); }
+
+/* RESPONDER HANDOFF BRIEF MODAL */
+.modal-wide { max-width: 640px; max-height: 90vh; overflow-y: auto; }
+.brief-body {
+  background: var(--surface-alt);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+.brief-section { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+.brief-section h4 { font-size: 0.86rem; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; color: var(--primary); }
+.brief-red-box { background: var(--red-soft); border: 1.5px solid var(--red); border-radius: 8px; padding: 10px 12px; color: #7f1d1d; }
+
+/* LARGE-TEXT HIGH-READABILITY EMERGENCY MODE (Aa+) */
+body.large-text { font-size: 118%; }
+body.large-text .btn { padding: 11px 16px; font-size: 0.98rem; }
+body.large-text .btn-small { padding: 8px 12px; font-size: 0.88rem; }
+body.large-text .room-number { font-size: 1.3rem; }
+body.large-text table { font-size: 0.96rem; }
+
+/* MOBILE BOTTOM NAVIGATION BAR (Thumb-Friendly One-Hand Use) */
+.mobile-bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #0b2e1f;
+  border-top: 2px solid var(--gold-dark);
+  z-index: 55;
+  padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+  justify-content: space-around;
+  align-items: center;
+  gap: 4px;
+}
+
+.mob-nav-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: transparent;
+  border: none;
+  color: #cde0d5;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 6px 4px;
+  border-radius: 8px;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.mob-nav-btn .mob-icon { font-size: 1.05rem; line-height: 1; }
+.mob-nav-btn.active { background: rgba(212, 162, 56, 0.22); color: var(--gold-light); }
+
+@media (max-width: 768px) {
+  .mobile-bottom-nav:not(.hidden) { display: flex; }
+  .workspace-body { padding-bottom: 84px; }
+  .hide-xs { display: none !important; }
+  .btn-small { min-height: 36px; }
+}
+
 /* PRINT MODES */
 .print-only { display: none; }
 
@@ -920,4 +1017,17 @@ input:focus, select:focus, textarea:focus {
   body.print-mode-cards #qrSheet { display: none !important; }
   body.print-mode-cards #qrTab,
   body.print-mode-cards .print-cards-keep { display: block !important; }
+
+  body.print-mode-brief #appShell { display: none !important; }
+  body.print-mode-brief #responderBriefModal {
+    display: block !important;
+    position: static !important;
+    background: #fff !important;
+    padding: 0 !important;
+  }
+  body.print-mode-brief #responderBriefModal .modal-content {
+    max-width: 100% !important;
+    box-shadow: none !important;
+    padding: 10px !important;
+  }
 }
