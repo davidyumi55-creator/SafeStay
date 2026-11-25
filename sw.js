@@ -4,7 +4,7 @@
    SAFE-STAY and print Paper Backups if internet drops.
    ========================================================= */
 
-const CACHE_NAME = "safestay-shell-v3";
+const CACHE_NAME = "safestay-shell-v4";
 const CORE_ASSETS = [
   "/",
   "/index.html",

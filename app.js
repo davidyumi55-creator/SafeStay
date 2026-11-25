@@ -401,10 +401,6 @@ function onAuthenticated(initialState) {
   state = initialState;
   lastRedCount = (state.rooms || []).filter(r => r.status === "RED").length;
   cacheOfflineState(state);
-
-  if (localStorage.getItem("safestay_large_text") === "on") {
-    document.body.classList.add("large-text");
-  }
   updateSoundButtonUI();
 
   document.getElementById("loginScreen").classList.add("hidden");
@@ -1458,12 +1454,6 @@ function playRedAlertChime() {
       osc.stop(ctx.currentTime + i * 0.18 + 0.17);
     });
   } catch {}
-}
-
-function toggleLargeText() {
-  const isLarge = document.body.classList.toggle("large-text");
-  localStorage.setItem("safestay_large_text", isLarge ? "on" : "off");
-  showToast(isLarge ? "Large Text Emergency Mode ON." : "Standard text size restored.");
 }
 
 function applySavedTheme() {
