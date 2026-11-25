@@ -12,7 +12,19 @@ const os = require("node:os");
 const dbAdapter = require("./db");
 
 const PORT = Number(process.env.PORT) || 3000;
-const PUBLIC_DIR = path.join(__dirname, "public");
+const PUBLIC_DIR = fs.existsSync(path.join(__dirname, "public", "index.html"))
+  ? path.join(__dirname, "public")
+  : __dirname;
+
+// Allowed static files when serving from flat root (prevents exposing server.js / db.js / .env)
+const ALLOWED_ROOT_FILES = new Set([
+  "index.html",
+  "style.css",
+  "app.js",
+  "roleDashboards.js",
+  "qrcode.js",
+  "logo.jpg"
+]);
 
 // Roles aligned with Proposal Section 8
 const ROLES = {
@@ -282,7 +294,17 @@ const MIME_TYPES = {
 
 function serveStatic(req, res, pathname) {
   const safePath = pathname === "/" ? "/index.html" : pathname;
-  const fullPath = path.join(PUBLIC_DIR, path.normalize(safePath));
+  const normalized = path.normalize(safePath).replace(/^(\.\.[/\\])+/, "");
+  const cleanName = normalized.replace(/^[/\\]+/, "");
+
+  // When serving from root directory, only allow frontend files
+  if (PUBLIC_DIR === __dirname && !ALLOWED_ROOT_FILES.has(cleanName)) {
+    res.writeHead(404, { "Content-Type": "text/plain" });
+    res.end("Not Found");
+    return;
+  }
+
+  const fullPath = path.join(PUBLIC_DIR, cleanName);
   if (!fullPath.startsWith(PUBLIC_DIR)) {
     res.writeHead(403);
     res.end("Forbidden");
