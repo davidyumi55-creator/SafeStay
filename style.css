@@ -47,6 +47,7 @@ html, body {
   background: var(--bg);
   color: var(--text);
   line-height: 1.5;
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -205,6 +206,8 @@ html, body {
   flex: 1;
   margin-left: 265px;
   min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -219,6 +222,9 @@ html, body {
   gap: 12px;
   flex-wrap: wrap;
   box-shadow: var(--shadow-sm);
+  position: sticky;
+  top: 0;
+  z-index: 40;
 }
 
 .topbar-left {
@@ -326,7 +332,7 @@ html, body {
 
 .dash-grid-2 {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -364,22 +370,37 @@ html, body {
   z-index: 50;
 }
 
-@media (max-width: 920px) {
-  .sidebar {
-    transform: translateX(-100%);
-  }
-  .sidebar.open {
-    transform: translateX(0);
-  }
-  .main-workspace {
-    margin-left: 0;
-  }
-  .menu-toggle-btn {
-    display: inline-block;
-  }
-  .workspace-body {
-    padding: 14px 14px 48px;
-  }
+/* =========================================================
+   RESPONSIVE BREAKPOINTS (Desktop, Laptop, Tablet & Phone)
+   ========================================================= */
+@media (max-width: 1180px) {
+  .summary-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .workflow-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 960px) {
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  .main-workspace { margin-left: 0; }
+  .menu-toggle-btn { display: inline-block; }
+  .workspace-body { padding: 14px 16px 48px; }
+  .two-col, .dash-grid-2, .eval-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+  .topbar { padding: 10px 14px; }
+  .topbar-left h1 { font-size: 1.05rem; }
+  .safety-banner { font-size: 0.75rem; padding: 7px 10px; }
+  .summary-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .summary-card.status-pills { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; justify-content: flex-start; gap: 6px; }
+  .workflow-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .form-row { grid-template-columns: 1fr; }
+  .filter-bar { width: 100%; }
+  .filter-bar input, .filter-bar select { flex: 1; min-width: 120px; }
+  .role-hero { padding: 14px; }
+  .card { padding: 15px; }
+  .quick-role-btns { grid-template-columns: repeat(2, 1fr); }
+  .login-card { padding: 18px 18px; }
 }
 
 .hidden { display: none !important; }
@@ -614,7 +635,7 @@ html, body {
   margin: 14px auto 0;
   padding: 0 20px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -622,10 +643,11 @@ html, body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 14px 16px;
+  padding: 13px 15px;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  min-width: 0;
   box-shadow: var(--shadow-sm);
 }
 
@@ -655,18 +677,21 @@ html, body {
 /* WORKFLOW BAR */
 .workflow-bar { max-width: 1220px; margin: 14px auto 0; padding: 0 20px; }
 .workflow-label { font-size: 0.75rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; }
-.workflow-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; }
+.workflow-steps { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
 
 .workflow-step {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 7px 10px;
-  font-size: 0.78rem;
+  padding: 7px 9px;
+  font-size: 0.77rem;
   font-weight: 600;
   color: var(--muted);
   cursor: pointer;
   text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition: all 0.15s ease;
 }
 .workflow-step:hover { border-color: var(--primary); color: var(--text); }
@@ -760,17 +785,21 @@ html, body {
 /* CARDS, TABLES, FORMS */
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: var(--shadow-sm); }
 .card-header-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
-.two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; }
-.table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 11px; overflow-x: auto; box-shadow: var(--shadow-sm); }
-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
-th { background: var(--surface-alt); font-weight: 700; font-size: 0.77rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; }
+.two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 11px; overflow-x: auto; -webkit-overflow-scrolling: touch; box-shadow: var(--shadow-sm); }
+table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 0.86rem; }
+th, td { padding: 9px 11px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+th { background: var(--surface-alt); font-weight: 700; font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; }
+td:first-child, td:nth-child(2) { white-space: nowrap; }
+td:last-child { white-space: nowrap; }
+td:last-child .btn { margin-right: 4px; }
+td:last-child .btn:last-child { margin-right: 0; }
 tr.row-RED { background: var(--red-soft); }
 tr.row-YELLOW { background: var(--yellow-soft); }
 
 .form-group { margin-bottom: 12px; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.eval-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.eval-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
 label { display: block; font-weight: 600; font-size: 0.83rem; margin-bottom: 4px; color: var(--text); }
 
 input, select, textarea {
