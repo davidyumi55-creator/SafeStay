@@ -378,9 +378,9 @@ async function handleLogin(event) {
 
 async function handleLogout() {
   const ok = await confirmAction({
-    title: "Sign Out of SAFE-STAY?",
-    message: "You will be signed out of this device and will need to sign in again to submit or view live updates.",
-    okText: "Sign Out",
+    title: "Logout?",
+    message: "You will be logged out of this device and will need to sign in again to view or submit live updates.",
+    okText: "Logout",
     okClass: "btn-danger"
   });
   if (!ok) return;
@@ -390,7 +390,7 @@ async function handleLogout() {
   } catch {}
   state = null;
   showLoginScreen();
-  showToast("Signed out safely.");
+  showToast("Logged out safely.");
 }
 
 let activeTabId = "dashboardTab";

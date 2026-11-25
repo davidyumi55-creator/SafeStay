@@ -1129,6 +1129,10 @@ body.dark-mode .brief-red-box { background: rgba(185, 28, 28, 0.25); color: #fec
 body.dark-mode .dash-alert-item { background: rgba(185, 28, 28, 0.22); border-color: #ef4444; color: var(--text); }
 body.dark-mode .floor-chip.active { background: var(--gold); color: #071a11; border-color: var(--gold); }
 body.dark-mode .menu-toggle-btn { background: var(--surface-alt); color: var(--text); border-color: var(--border-strong); }
+body.dark-mode .cut-GREEN { background: rgba(21, 128, 61, 0.3); border-color: #4ade80; color: #dcfce7; }
+body.dark-mode .cut-YELLOW { background: rgba(202, 138, 4, 0.3); border-color: #facc15; color: #fef9c3; }
+body.dark-mode .cut-RED { background: rgba(185, 28, 28, 0.32); border-color: #f87171; color: #fee2e2; }
+body.dark-mode .cut-footer { border-top-color: rgba(255, 255, 255, 0.25); }
 
 /* PRINT MODES */
 .print-only { display: none; }
