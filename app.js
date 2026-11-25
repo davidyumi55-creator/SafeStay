@@ -15,6 +15,7 @@ const WORKFLOW_STAGES = [
 
 let state = null;
 let boardView = "cards";
+let floorFilter = "ALL";
 let eventSource = null;
 let incidentTimerInterval = null;
 let pendingScannedRoom = new URLSearchParams(window.location.search).get("room");
@@ -324,6 +325,12 @@ async function api(url, method = "GET", body = null) {
 
 async function initApp() {
   document.body.classList.add("print-mode-backup");
+
+  // Register offline Service Worker when hosted over HTTP/HTTPS (Railway / LAN)
+  if (!isLocalMode && "serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  }
+
   try {
     const data = await api("/api/state");
     onAuthenticated(data);
@@ -735,10 +742,33 @@ async function setWorkflowStage(stage) {
   }
 }
 
+function setFloorFilter(floor) {
+  floorFilter = floor;
+  renderMonitoringBoard();
+}
+
 function renderMonitoringBoard() {
   const container = document.getElementById("monitoringBoard");
+  const chipsBar = document.getElementById("floorChipsBar");
   const filter = document.getElementById("boardFilter").value;
-  const filteredRooms = state.rooms.filter(r => filter === "ALL" || r.status === filter);
+
+  // Render quick floor filter chips
+  const allFloors = [...new Set(state.rooms.map(r => String(r.floor)))].sort((a, b) => Number(a) - Number(b));
+  if (floorFilter !== "ALL" && !allFloors.includes(String(floorFilter))) floorFilter = "ALL";
+  if (chipsBar) {
+    chipsBar.innerHTML = [
+      `<button class="floor-chip ${floorFilter === "ALL" ? "active" : ""}" onclick="setFloorFilter('ALL')">All Floors (${state.rooms.length})</button>`,
+      ...allFloors.map(f => {
+        const cnt = state.rooms.filter(r => String(r.floor) === f).length;
+        return `<button class="floor-chip ${String(floorFilter) === f ? "active" : ""}" onclick="setFloorFilter('${f}')">Floor ${escapeHTML(f)} (${cnt})</button>`;
+      })
+    ].join("");
+  }
+
+  const filteredRooms = state.rooms.filter(r =>
+    (filter === "ALL" || r.status === filter) &&
+    (floorFilter === "ALL" || String(r.floor) === String(floorFilter))
+  );
 
   if (filteredRooms.length === 0) {
     container.innerHTML = `<div class="card"><p class="muted">No rooms match the selected status filter.</p></div>`;
@@ -956,6 +986,21 @@ function renderQRLabels() {
       ? `<strong>Live Cloud QR Access:</strong> Any staff phone with internet or Wi-Fi can scan these QR stickers to open <code>${escapeHTML(lanBase)}</code> directly to that room!`
       : `<strong>Live Mobile QR Access:</strong> Phones on the same Wi-Fi can open <code>${escapeHTML(lanBase)}</code> or scan any room QR sticker below for live sync!`;
 
+  const sysQRBox = document.getElementById("systemAccessQRBox");
+  if (sysQRBox) {
+    const accessUrl = isLocalMode ? "https://safestay-production.up.railway.app" : lanBase;
+    const accessSvg = SafeStayQR.toSVG(accessUrl, 135);
+    sysQRBox.innerHTML = `
+      <div class="system-qr-left">
+        <h3>System Access QR Code (Share with Staff / Reviewers)</h3>
+        <p class="muted">Anyone can scan this QR code with their phone camera to open <strong>SAFE-STAY</strong> immediately:</p>
+        <p style="margin:6px 0; font-weight:700; color:var(--primary); word-break:break-all;">${escapeHTML(accessUrl)}</p>
+        <button class="btn btn-outline btn-small" onclick="copySystemUrl('${escapeHTML(accessUrl)}')">Copy Live Link</button>
+      </div>
+      <div class="qr-svg-wrap">${accessSvg}</div>
+    `;
+  }
+
   const mode = document.getElementById("qrMode").value;
   const sorted = [...state.rooms].sort((a, b) => a.floor - b.floor || a.room.localeCompare(b.room));
 
@@ -993,18 +1038,91 @@ function renderIncidentArchives() {
 
   container.innerHTML = state.incidentArchives.map(a => `
     <div class="archive-card">
-      <strong>${escapeHTML(a.id)} &mdash; ${escapeHTML(a.title)}</strong> (${escapeHTML(a.type)})
-      <div class="muted" style="margin-top:4px;">
-        Assembly: ${escapeHTML(a.assemblyArea)} &bull;
-        Confirmed: <strong>${a.totalConfirmed}/${a.totalExpected}</strong> guests &bull;
-        Unresolved at close: <strong>${a.unresolvedCount}</strong>
-      </div>
-      <div style="margin-top:4px;">Summary: ${escapeHTML(a.summaryNote)}</div>
-      <div class="muted" style="font-size:0.78rem; margin-top:4px;">
-        Closed by ${escapeHTML(a.closedBy)} on ${new Date(a.closedAt).toLocaleString()}
+      <div class="card-header-row">
+        <div>
+          <strong>${escapeHTML(a.id)} &mdash; ${escapeHTML(a.title)}</strong> (${escapeHTML(a.type)})
+          <div class="muted" style="margin-top:4px;">
+            Assembly: ${escapeHTML(a.assemblyArea)} &bull;
+            Confirmed: <strong>${a.totalConfirmed}/${a.totalExpected}</strong> guests &bull;
+            Unresolved at close: <strong>${a.unresolvedCount}</strong>
+          </div>
+          <div style="margin-top:4px;">Summary: ${escapeHTML(a.summaryNote)}</div>
+          <div class="muted" style="font-size:0.78rem; margin-top:4px;">
+            Closed by ${escapeHTML(a.closedBy)} on ${new Date(a.closedAt).toLocaleString()}
+          </div>
+        </div>
+        <button class="btn btn-outline btn-small no-print" onclick="printArchiveReport('${escapeHTML(a.id)}')">Print Report</button>
       </div>
     </div>
   `).join("");
+}
+
+async function copySystemUrl(url) {
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast("Live system link copied!");
+  } catch {
+    showToast(url);
+  }
+}
+
+function printArchiveReport(archiveId) {
+  const a = (state.incidentArchives || []).find(item => item.id === archiveId);
+  if (!a) return;
+  const win = window.open("", "_blank", "width=820,height=900");
+  if (!win) return showToast("Please allow pop-ups to print the Post-Incident Report.");
+
+  const logsHtml = (a.logsSnapshot || []).map(l => `
+    <tr>
+      <td>${escapeHTML(l.dateTime)}</td>
+      <td>${escapeHTML(l.room)}</td>
+      <td><strong>${escapeHTML(l.status)}</strong></td>
+      <td>${escapeHTML(l.role)}</td>
+      <td>${escapeHTML(l.message)}</td>
+    </tr>
+  `).join("");
+
+  win.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>SAFE-STAY Post-Incident Report - ${escapeHTML(a.id)}</title>
+      <style>
+        body { font-family: "Segoe UI", Arial, sans-serif; padding: 28px; color: #10241b; line-height: 1.5; }
+        h1 { color: #0f3d28; border-bottom: 3px solid #d4a238; padding-bottom: 8px; margin-bottom: 12px; }
+        .meta { background: #faf8f2; border: 1px solid #d2c8b2; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.88rem; }
+        th, td { border: 1px solid #cbd5e1; padding: 7px 9px; text-align: left; }
+        th { background: #f1f5f9; }
+        .sig { margin-top: 32px; display: flex; justify-content: space-between; gap: 24px; }
+        .sig div { flex: 1; border-top: 1px solid #334155; padding-top: 6px; font-size: 0.85rem; }
+      </style>
+    </head>
+    <body>
+      <h1>SAFE-STAY &mdash; Post-Incident Review Report</h1>
+      <div class="meta">
+        <strong>Establishment:</strong> ${escapeHTML(state.hotel.name)}<br />
+        <strong>Incident ID:</strong> ${escapeHTML(a.id)} &bull; <strong>Title:</strong> ${escapeHTML(a.title)} (${escapeHTML(a.type)})<br />
+        <strong>Assembly Area:</strong> ${escapeHTML(a.assemblyArea)}<br />
+        <strong>Started:</strong> ${a.startedAt ? new Date(a.startedAt).toLocaleString() : "N/A"} &bull;
+        <strong>Closed:</strong> ${new Date(a.closedAt).toLocaleString()} by ${escapeHTML(a.closedBy)}<br />
+        <strong>Accountability Result:</strong> ${a.totalConfirmed} / ${a.totalExpected} guests confirmed (${a.unresolvedCount} unresolved room(s) at close)<br />
+        <strong>Post-Incident Summary:</strong> ${escapeHTML(a.summaryNote)}
+      </div>
+      <h3>Preserved Audit Timeline (${(a.logsSnapshot || []).length} entries)</h3>
+      <table>
+        <thead><tr><th>Date &amp; Time</th><th>Room</th><th>Status</th><th>Reporting Role</th><th>Details</th></tr></thead>
+        <tbody>${logsHtml || "<tr><td colspan='5'>No timeline entries recorded.</td></tr>"}</tbody>
+      </table>
+      <div class="sig">
+        <div>Emergency Coordinator Signature &amp; Date</div>
+        <div>Safety Officer / Management Review &amp; Date</div>
+      </div>
+      <script>window.onload = function() { window.print(); };<\/script>
+    </body>
+    </html>
+  `);
+  win.document.close();
 }
 
 function renderStaffManagement() {

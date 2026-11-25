@@ -24,7 +24,8 @@ const ALLOWED_ROOT_FILES = new Set([
   "roleDashboards.js",
   "qrcode.js",
   "logo.jpg",
-  "manifest.json"
+  "manifest.json",
+  "sw.js"
 ]);
 
 // Roles aligned with Proposal Section 8

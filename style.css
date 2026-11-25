@@ -370,39 +370,6 @@ html, body {
   z-index: 50;
 }
 
-/* =========================================================
-   RESPONSIVE BREAKPOINTS (Desktop, Laptop, Tablet & Phone)
-   ========================================================= */
-@media (max-width: 1180px) {
-  .summary-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .workflow-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-
-@media (max-width: 960px) {
-  .sidebar { transform: translateX(-100%); }
-  .sidebar.open { transform: translateX(0); }
-  .main-workspace { margin-left: 0; }
-  .menu-toggle-btn { display: inline-block; }
-  .workspace-body { padding: 14px 16px 48px; }
-  .two-col, .dash-grid-2, .eval-grid { grid-template-columns: 1fr; }
-}
-
-@media (max-width: 640px) {
-  .topbar { padding: 10px 14px; }
-  .topbar-left h1 { font-size: 1.05rem; }
-  .safety-banner { font-size: 0.75rem; padding: 7px 10px; }
-  .summary-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .summary-card.status-pills { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; justify-content: flex-start; gap: 6px; }
-  .workflow-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .form-row { grid-template-columns: 1fr; }
-  .filter-bar { width: 100%; }
-  .filter-bar input, .filter-bar select { flex: 1; min-width: 120px; }
-  .role-hero { padding: 14px; }
-  .card { padding: 15px; }
-  .quick-role-btns { grid-template-columns: repeat(2, 1fr); }
-  .login-card { padding: 18px 18px; }
-}
-
 .hidden { display: none !important; }
 .text-green { color: var(--green); }
 .text-red { color: var(--red); }
@@ -783,11 +750,12 @@ html, body {
 .room-meta { font-size: 0.74rem; color: var(--muted); border-top: 1px solid rgba(0, 0, 0, 0.08); padding-top: 6px; }
 
 /* CARDS, TABLES, FORMS */
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: var(--shadow-sm); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; min-width: 0; max-width: 100%; box-shadow: var(--shadow-sm); }
 .card-header-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
 .two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
-.table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 11px; overflow-x: auto; -webkit-overflow-scrolling: touch; box-shadow: var(--shadow-sm); }
-table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 0.86rem; }
+.table-wrap { width: 100%; max-width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 11px; overflow-x: auto; -webkit-overflow-scrolling: touch; box-shadow: var(--shadow-sm); }
+table { width: 100%; min-width: 680px; border-collapse: collapse; font-size: 0.86rem; }
+.card table { min-width: 460px; }
 th, td { padding: 9px 11px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
 th { background: var(--surface-alt); font-weight: 700; font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; }
 td:first-child, td:nth-child(2) { white-space: nowrap; }
@@ -872,7 +840,7 @@ input:focus, select:focus, textarea:focus {
 
 /* PROGRESS BAR, LOGS, INFO BOX, ARCHIVES */
 .progress-card { background: var(--surface); border: 1px solid var(--border); border-radius: 11px; padding: 12px 16px; margin-bottom: 14px; box-shadow: var(--shadow-sm); }
-.progress-header { display: flex; justify-content: space-between; font-size: 0.86rem; margin-bottom: 8px; }
+.progress-header { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 10px; font-size: 0.86rem; margin-bottom: 8px; }
 .progress-track { height: 11px; background: #e2e8f0; border-radius: 999px; overflow: hidden; }
 .progress-fill { height: 100%; background: linear-gradient(90deg, #16a34a 0%, #15803d 100%); transition: width 0.25s ease; }
 
@@ -890,6 +858,63 @@ input:focus, select:focus, textarea:focus {
 .lock-icon { font-size: 2.2rem; margin-bottom: 8px; }
 
 .archive-card { border: 1px solid var(--border); border-radius: 9px; padding: 12px 14px; margin-bottom: 10px; background: var(--surface-alt); font-size: 0.87rem; }
+
+/* FLOOR FILTER CHIPS (Quick Floor Focus on Monitoring Board) */
+.floor-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.floor-chip {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  color: var(--muted);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.floor-chip:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.floor-chip.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #ffffff;
+}
+
+/* IN-APP SYSTEM ACCESS QR CARD (Tab 5) */
+.system-qr-card {
+  background: var(--surface);
+  border: 2px solid var(--gold);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.system-qr-left {
+  flex: 1;
+  min-width: 240px;
+}
+
+.system-qr-left h3 {
+  font-size: 1.05rem;
+  color: var(--primary);
+  margin-bottom: 4px;
+}
 
 /* QR GRID & CUT-OUT STATUS CARDS */
 .qr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
@@ -1013,11 +1038,50 @@ body.large-text table { font-size: 0.96rem; }
 .mob-nav-btn .mob-icon { font-size: 1.05rem; line-height: 1; }
 .mob-nav-btn.active { background: rgba(212, 162, 56, 0.22); color: var(--gold-light); }
 
+/* =========================================================
+   RESPONSIVE BREAKPOINTS (Placed LAST so they always win!)
+   ========================================================= */
+@media (max-width: 1180px) {
+  .summary-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .workflow-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 960px) {
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  .main-workspace { margin-left: 0; }
+  .menu-toggle-btn { display: inline-block; }
+  .workspace-body { padding: 14px 14px 56px; }
+  .two-col, .dash-grid-2, .eval-grid { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 768px) {
   .mobile-bottom-nav:not(.hidden) { display: flex; }
-  .workspace-body { padding-bottom: 84px; }
+  .workspace-body { padding-bottom: 88px; }
   .hide-xs { display: none !important; }
   .btn-small { min-height: 36px; }
+}
+
+@media (max-width: 640px) {
+  .topbar { padding: 10px 12px; }
+  .topbar-left h1 { font-size: 1rem; }
+  .topbar-right { gap: 6px; }
+  .safety-banner { font-size: 0.75rem; padding: 7px 10px; }
+  .summary-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .summary-card { padding: 11px 12px; }
+  .summary-label { font-size: 0.7rem; }
+  .summary-value { font-size: 1.5rem; }
+  .summary-card.status-pills { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; justify-content: flex-start; gap: 6px; }
+  .workflow-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .workflow-step { white-space: normal; line-height: 1.25; font-size: 0.76rem; padding: 8px 9px; }
+  .form-row { grid-template-columns: 1fr; }
+  .filter-bar { width: 100%; }
+  .filter-bar input, .filter-bar select { flex: 1; min-width: 0; width: 100%; }
+  .role-hero { padding: 14px; }
+  .card { padding: 14px; }
+  .dash-list-item, .dash-alert-item { flex-wrap: wrap; word-break: break-word; }
+  .quick-role-btns { grid-template-columns: repeat(2, 1fr); }
+  .login-card { padding: 18px; }
 }
 
 /* PRINT MODES */
