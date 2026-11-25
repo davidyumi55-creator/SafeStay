@@ -1084,6 +1084,59 @@ body.large-text table { font-size: 0.96rem; }
   .login-card { padding: 18px; }
 }
 
+/* =========================================================
+   DARK MODE THEME (Deep Emerald Night + Metallic Gold)
+   ========================================================= */
+body.dark-mode {
+  --bg: #07130e;
+  --surface: #0e2018;
+  --surface-alt: #132920;
+  --border: #1e3b2e;
+  --border-strong: #2c5241;
+  --text: #edf5f0;
+  --muted: #9eb7aa;
+  --primary: #d4a238;
+  --primary-hover: #e5b74e;
+  --primary-soft: rgba(212, 162, 56, 0.16);
+
+  --green: #4ade80;
+  --green-bg: rgba(34, 197, 94, 0.18);
+  --green-soft: rgba(21, 128, 61, 0.22);
+  --yellow: #facc15;
+  --yellow-bg: rgba(234, 179, 8, 0.18);
+  --yellow-soft: rgba(202, 138, 4, 0.2);
+  --red: #f87171;
+  --red-bg: rgba(239, 68, 68, 0.2);
+  --red-soft: rgba(185, 28, 28, 0.24);
+}
+
+body.dark-mode .btn-primary { color: #071a11; font-weight: 700; }
+body.dark-mode .btn-outline { background: var(--surface-alt); color: var(--text); border-color: var(--border-strong); }
+body.dark-mode .btn-outline:hover { background: #1a372b; border-color: var(--gold); }
+body.dark-mode input,
+body.dark-mode select,
+body.dark-mode textarea { background: #091711; color: var(--text); border-color: var(--border-strong); }
+body.dark-mode .modal-content,
+body.dark-mode .login-card { background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); }
+body.dark-mode .room-card { background: var(--surface-alt); }
+body.dark-mode .room-card.status-GREEN { background: rgba(21, 128, 61, 0.18); border-color: #22c55e; }
+body.dark-mode .room-card.status-YELLOW { background: rgba(202, 138, 4, 0.18); border-color: #eab308; }
+body.dark-mode .room-card.status-RED { background: rgba(185, 28, 28, 0.22); border-color: #ef4444; }
+body.dark-mode .badge-GREEN { background: #15803d; color: #fff; }
+body.dark-mode .badge-YELLOW { background: #a16207; color: #fff; }
+body.dark-mode .badge-RED { background: #b91c1c; color: #fff; }
+body.dark-mode .escalation-alert { background: rgba(185, 28, 28, 0.28); color: #fecaca; border-color: #ef4444; }
+body.dark-mode .escalation-clear { background: rgba(21, 128, 61, 0.28); color: #bbf7d0; border-color: #22c55e; }
+body.dark-mode .incident-standby { background: linear-gradient(135deg, #112b1f 0%, #1c3123 100%); color: var(--gold-light); border-color: var(--gold-dark); }
+body.dark-mode .workflow-step.active { background: rgba(212, 162, 56, 0.22); color: var(--gold-light); border-color: var(--gold); }
+body.dark-mode .role-pill { background: rgba(212, 162, 56, 0.18); color: var(--gold-light); border-color: var(--gold-dark); }
+body.dark-mode .info-box { background: rgba(212, 162, 56, 0.12); border-color: var(--gold-dark); color: var(--gold-light); }
+body.dark-mode .eval-chip { background: rgba(212, 162, 56, 0.15); border-color: var(--gold-dark); color: var(--gold-light); }
+body.dark-mode .brief-red-box { background: rgba(185, 28, 28, 0.25); color: #fecaca; border-color: #ef4444; }
+body.dark-mode .dash-alert-item { background: rgba(185, 28, 28, 0.22); border-color: #ef4444; color: var(--text); }
+body.dark-mode .floor-chip.active { background: var(--gold); color: #071a11; border-color: var(--gold); }
+body.dark-mode .menu-toggle-btn { background: var(--surface-alt); color: var(--text); border-color: var(--border-strong); }
+
 /* PRINT MODES */
 .print-only { display: none; }
 

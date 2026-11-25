@@ -325,6 +325,7 @@ async function api(url, method = "GET", body = null) {
 
 async function initApp() {
   document.body.classList.add("print-mode-backup");
+  applySavedTheme();
 
   // Register offline Service Worker when hosted over HTTP/HTTPS (Railway / LAN)
   if (!isLocalMode && "serviceWorker" in navigator) {
@@ -1463,6 +1464,26 @@ function toggleLargeText() {
   const isLarge = document.body.classList.toggle("large-text");
   localStorage.setItem("safestay_large_text", isLarge ? "on" : "off");
   showToast(isLarge ? "Large Text Emergency Mode ON." : "Standard text size restored.");
+}
+
+function applySavedTheme() {
+  const saved = localStorage.getItem("safestay_theme");
+  const isDark = saved === "dark";
+  document.body.classList.toggle("dark-mode", isDark);
+  updateThemeButtonUI(isDark);
+}
+
+function toggleTheme() {
+  const isDark = document.body.classList.toggle("dark-mode");
+  localStorage.setItem("safestay_theme", isDark ? "dark" : "light");
+  updateThemeButtonUI(isDark);
+  showToast(isDark ? "Dark Mode enabled." : "Light Mode enabled.");
+}
+
+function updateThemeButtonUI(isDark) {
+  const btn = document.getElementById("btnThemeToggle");
+  if (!btn) return;
+  btn.innerHTML = isDark ? "&#9728;&#65039; Light" : "&#127769; Dark";
 }
 
 function closeQuickEditModal() {
