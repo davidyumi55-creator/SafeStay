@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SAFE-STAY | Hotel Emergency Guest Accountability &amp; Assistance System</title>
+  <link rel="icon" type="image/jpeg" href="logo.jpg" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- =========================================================
+       LOGIN SCREEN (Role-Based Access Control - Section 8 & 16)
+       ========================================================= -->
+  <div id="loginScreen" class="login-screen">
+    <div class="login-card">
+      <div class="login-brand">
+        <img src="logo.jpg" alt="SAFE-STAY Logo" class="login-logo" />
+        <h1>Authorized Staff Sign In</h1>
+        <p class="muted">Hotel Emergency Guest Accountability &amp; Assistance System</p>
+      </div>
+
+      <div class="safety-box-small">
+        <strong>Safety Notice:</strong> SAFE-STAY is an information-management support tool only.
+        Always follow official alarms and emergency plans. Never re-enter unsafe areas.
+      </div>
+
+      <form id="loginForm" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label for="loginUsername">Staff Username</label>
+          <input type="text" id="loginUsername" placeholder="e.g., coordinator" required autocomplete="username" />
+        </div>
+        <div class="form-group">
+          <label for="loginPassword">Password</label>
+          <input type="password" id="loginPassword" placeholder="Enter password" required autocomplete="current-password" />
+        </div>
+        <p id="loginError" class="text-red small-text"></p>
+        <button type="submit" class="btn btn-primary full-width" style="margin-top:8px;">Sign In to SAFE-STAY</button>
+      </form>
+
+      <div class="quick-roles">
+        <div class="quick-roles-label">Quick Fill Staff Role (Default password: <code>safe1234</code>):</div>
+        <div class="quick-role-btns">
+          <button type="button" class="btn btn-outline btn-small" onclick="fillRole('coordinator')">Coordinator</button>
+          <button type="button" class="btn btn-outline btn-small" onclick="fillRole('frontoffice')">Front Office</button>
+          <button type="button" class="btn btn-outline btn-small" onclick="fillRole('housekeeping')">Housekeeping</button>
+          <button type="button" class="btn btn-outline btn-small" onclick="fillRole('security')">Security</button>
+          <button type="button" class="btn btn-outline btn-small" onclick="fillRole('assembly')">Assembly Team</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MAIN APPLICATION SHELL (Sidebar + Workspace)
+       ========================================================= -->
+  <div id="appShell" class="app-layout hidden">
+
+    <!-- MOBILE SIDEBAR BACKDROP -->
+    <div id="sidebarOverlay" class="sidebar-overlay hidden no-print" onclick="toggleSidebar(false)"></div>
+
+    <!-- LEFT SIDEBAR -->
+    <aside id="sidebar" class="sidebar no-print">
+      <div class="sidebar-header">
+        <div class="sidebar-brand-row">
+          <img src="logo.jpg" alt="SAFE-STAY Logo" class="sidebar-logo" />
+          <div>
+            <div class="brand-wordmark">SAFE-STAY</div>
+            <div class="sidebar-hotel" id="hotelTitle">SAFE-STAY Grand Hotel</div>
+          </div>
+        </div>
+        <div id="syncIndicator" class="sync-badge sync-live">&#9679; LIVE SYNC</div>
+      </div>
+
+      <!-- DYNAMIC ROLE-FILTERED MENU (Populated by app.js + roleDashboards.js) -->
+      <nav id="sidebarNav" class="sidebar-nav"></nav>
+
+      <!-- SIDEBAR USER PROFILE FOOTER -->
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <strong id="currentUserName">Staff Member</strong>
+          <span id="currentUserRole">Department Role</span>
+        </div>
+        <button class="btn btn-sidebar-logout full-width" onclick="handleLogout()">Sign Out</button>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT WORKSPACE -->
+    <div class="main-workspace">
+
+      <!-- TOP SAFETY NOTICE (Proposal Section 16) -->
+      <div class="safety-banner no-print">
+        <strong>SAFETY REMINDER:</strong> SAFE-STAY is a support tool only &mdash; follow official alarms &amp; plans.
+        <strong>Never delay evacuation, enter hazardous areas, or re-enter the building.</strong>
+      </div>
+
+      <!-- TOP APPLICATION BAR -->
+      <header class="topbar no-print">
+        <div class="topbar-left">
+          <button class="menu-toggle-btn" onclick="toggleSidebar(true)" aria-label="Open menu">&#9776;</button>
+          <div>
+            <h1 id="activePageTitle">Dashboard</h1>
+            <p class="subtitle" id="hotelAssemblySubtitle">Assembly Point</p>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <button class="btn btn-outline btn-small" onclick="exportToCSV()">Export CSV</button>
+          <button class="btn btn-outline btn-small" onclick="printSection('backup')">Print Backup</button>
+        </div>
+      </header>
+
+      <!-- PRINT-ONLY HEADER FOR PAPER BACKUP (Proposal Section 4 & 16) -->
+      <section class="print-only print-backup-only print-header">
+        <h2 id="printHotelHeader">SAFE-STAY &mdash; OFFLINE PAPER BACKUP RECORD</h2>
+        <p>
+          <strong>Incident:</strong> <span id="printIncidentName"></span> &nbsp;|&nbsp;
+          <strong>Printed:</strong> <span id="printTimestamp"></span> &nbsp;|&nbsp;
+          <strong>Assembly Area:</strong> <span id="printAssemblyArea"></span>
+        </p>
+        <p class="print-note">Notice: Status markers never mean a hazardous area is safe to enter. Do not display sensitive personal details publicly.</p>
+      </section>
+
+      <div class="workspace-body">
+
+        <!-- ACTIVE INCIDENT / STANDBY COMMAND BAR -->
+        <section id="incidentBar" class="incident-bar no-print"></section>
+
+        <!-- URGENT ESCALATION BANNER -->
+        <div id="escalationBanner" class="escalation-banner hidden no-print"></div>
+
+        <!-- SUMMARY KPI BAR -->
+        <section class="summary-bar print-backup-keep">
+          <div class="summary-card">
+            <span class="summary-label">Occupied Rooms</span>
+            <strong class="summary-value" id="statTotalRooms">0</strong>
+          </div>
+          <div class="summary-card">
+            <span class="summary-label">Registered Guests</span>
+            <strong class="summary-value" id="statExpectedGuests">0</strong>
+          </div>
+          <div class="summary-card">
+            <span class="summary-label">Confirmed at Assembly</span>
+            <strong class="summary-value text-green" id="statConfirmedGuests">0</strong>
+          </div>
+          <div class="summary-card">
+            <span class="summary-label">Unaccounted Guests</span>
+            <strong class="summary-value text-red" id="statUnaccountedGuests">0</strong>
+          </div>
+          <div class="summary-card status-pills">
+            <span class="pill pill-green">GREEN: <b id="statGreen">0</b></span>
+            <span class="pill pill-yellow">YELLOW: <b id="statYellow">0</b></span>
+            <span class="pill pill-red">RED: <b id="statRed">0</b></span>
+          </div>
+        </section>
+
+        <!-- OPERATIONAL WORKFLOW TRACKER (Proposal Section 7) -->
+        <section class="workflow-bar no-print">
+          <div class="workflow-label">Operational Workflow Stage (Proposal Section 7):</div>
+          <div id="workflowSteps" class="workflow-steps"></div>
+        </section>
+
+        <!-- =========================================================
+             PAGE 0: ROLE-SPECIFIC HOME DASHBOARD
+             ========================================================= -->
+        <section id="dashboardTab" class="tab-panel active">
+          <div id="roleDashboardContent"></div>
+        </section>
+
+        <!-- =========================================================
+             PAGE 1: EMERGENCY ROOM MONITORING BOARD
+             ========================================================= -->
+        <section id="boardTab" class="tab-panel print-backup-keep">
+          <div class="section-header">
+            <div>
+              <h2>Emergency Room Monitoring Board</h2>
+              <p class="muted">Real-time floor-by-floor view synchronized across hotel devices. Click any room to update.</p>
+            </div>
+            <div class="filter-bar no-print">
+              <div class="view-toggle">
+                <button id="btnViewCards" class="toggle-btn active" onclick="setBoardView('cards')">Floor Plan</button>
+                <button id="btnViewTable" class="toggle-btn" onclick="setBoardView('table')">Board Table</button>
+              </div>
+              <select id="boardFilter" onchange="renderAll()" aria-label="Filter by status">
+                <option value="ALL">All Statuses</option>
+                <option value="RED">RED - Unresolved</option>
+                <option value="YELLOW">YELLOW - Pending</option>
+                <option value="GREEN">GREEN - Verified</option>
+              </select>
+              <button id="btnAddRoom" class="btn btn-primary" onclick="openAddRoomModal()">+ Add Room</button>
+            </div>
+          </div>
+
+          <div class="legend-grid">
+            <div class="legend-card legend-GREEN">
+              <div class="legend-title"><span class="dot dot-green"></span> GREEN &mdash; Verified</div>
+              <p><strong>Meaning:</strong> Status verified; no outstanding concern reported.</p>
+              <p><strong>Action:</strong> Continue monitoring and record source/time of update.</p>
+            </div>
+            <div class="legend-card legend-YELLOW">
+              <div class="legend-title"><span class="dot dot-yellow"></span> YELLOW &mdash; Pending</div>
+              <p><strong>Meaning:</strong> Status pending or not yet verified.</p>
+              <p><strong>Action:</strong> Coordinator seeks update through approved response channel.</p>
+            </div>
+            <div class="legend-card legend-RED">
+              <div class="legend-title"><span class="dot dot-red"></span> RED &mdash; Unresolved</div>
+              <p><strong>Meaning:</strong> Unresolved concern requiring urgent communication.</p>
+              <p><strong>Action:</strong> Immediately relay to emergency coordinator/responders. Do not re-enter.</p>
+            </div>
+          </div>
+
+          <div id="monitoringBoard"></div>
+        </section>
+
+        <!-- =========================================================
+             PAGE 2: GUEST ACCOUNTABILITY RECORD (Section 5C & Appendix A)
+             ========================================================= -->
+        <section id="accountabilityTab" class="tab-panel print-backup-keep">
+          <div class="section-header">
+            <div>
+              <h2>Guest Accountability Record (Assembly Area)</h2>
+              <p class="muted">Verify registered occupants arriving at the assembly area. Personal details are omitted.</p>
+            </div>
+            <div class="filter-bar no-print">
+              <input type="text" id="searchRoom" placeholder="Search room #..." oninput="renderAll()" />
+              <select id="accountabilityFilter" onchange="renderAll()" aria-label="Filter accountability">
+                <option value="ALL">All Rooms</option>
+                <option value="MISSING">With Unaccounted Guests</option>
+                <option value="CONFIRMED">Fully Confirmed</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="progress-card">
+            <div class="progress-header">
+              <span><strong>Assembly-Area Verification Progress</strong></span>
+              <span id="progressText">0% Verified</span>
+            </div>
+            <div class="progress-track">
+              <div id="progressFill" class="progress-fill" style="width: 0%;"></div>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Floor</th>
+                  <th>Room</th>
+                  <th>Expected Guests</th>
+                  <th>Confirmed at Assembly</th>
+                  <th>Unaccounted</th>
+                  <th>Accountability Status</th>
+                  <th>Update / Note</th>
+                  <th>Source &amp; Time</th>
+                  <th class="no-print">Assembly Check-In</th>
+                </tr>
+              </thead>
+              <tbody id="accountabilityTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- =========================================================
+             PAGE 3: DIGITAL TRACKER & AUDIT LOG (Section 5D & Appendix B)
+             ========================================================= -->
+        <section id="updateTab" class="tab-panel">
+          <div class="two-col">
+            <div class="card">
+              <h2>Digital Tracker &mdash; Submit Status Update</h2>
+              <p class="muted">Submits verified updates (Proposal Appendix B fields).</p>
+
+              <form id="statusUpdateForm" onsubmit="handleStatusUpdate(event)" style="margin-top:12px;">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="formRoom">Floor / Room or Zone</label>
+                    <select id="formRoom" required onchange="prefillUpdateForm()"></select>
+                  </div>
+                  <div class="form-group">
+                    <label for="formStatus">Status Category</label>
+                    <select id="formStatus" required>
+                      <option value="GREEN">GREEN &ndash; Verified / Confirmed</option>
+                      <option value="YELLOW">YELLOW &ndash; Pending / Not Verified</option>
+                      <option value="RED">RED &ndash; Unresolved / Urgent</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="formExpected">Registered Occupants</label>
+                    <input type="number" id="formExpected" min="0" max="20" required />
+                  </div>
+                  <div class="form-group">
+                    <label for="formConfirmed">Confirmed at Assembly</label>
+                    <input type="number" id="formConfirmed" min="0" max="20" required />
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="formNote">Verified Operational Note (No sensitive personal details)</label>
+                  <textarea id="formNote" rows="3" placeholder="e.g., 1 guest not yet accounted for - reported to coordinator"></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-primary full-width">Submit Live Update</button>
+              </form>
+
+              <div class="sub-box">
+                <h3>Optional Google Forms &amp; Google Sheets Backup Links</h3>
+                <p class="muted" style="margin-bottom:10px;">Quick-access links for your hotel's optional Google Form &amp; Sheet tracker.</p>
+                <div class="filter-bar">
+                  <button type="button" class="btn btn-outline btn-small" onclick="openExternalLink('form')">Open Google Form</button>
+                  <button type="button" class="btn btn-outline btn-small" onclick="openExternalLink('sheet')">Open Google Sheet</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header-row">
+                <div>
+                  <h2>Live Audit &amp; Update Log</h2>
+                  <p class="muted">Chronological record for coordination and post-incident review.</p>
+                </div>
+                <button class="btn btn-outline btn-small no-print" onclick="exportLogCSV()">Export Log CSV</button>
+              </div>
+              <div id="activityLog" class="log-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- =========================================================
+             PAGE 4: RESTRICTED GUEST ASSISTANCE RECORD (Section 5E)
+             ========================================================= -->
+        <section id="assistanceTab" class="tab-panel">
+          <div id="assistanceDenied" class="lock-box hidden">
+            <div class="lock-icon">&#128274;</div>
+            <h2>Restricted Access &mdash; Authorized Personnel Only</h2>
+            <p class="muted">
+              To protect guest privacy (SAFE-STAY Proposal Section 5E &amp; 16), the Guest Assistance Record is restricted
+              to <strong>Emergency Coordinator</strong>, <strong>Front Office</strong>, and <strong>Security / Safety</strong> roles.
+            </p>
+          </div>
+
+          <div id="assistanceAuthorized" class="hidden">
+            <div class="section-header">
+              <div>
+                <h2>Confidential Guest Assistance Record</h2>
+                <p class="muted">Restricted registry for voluntarily disclosed safety needs. Never shown on public boards.</p>
+              </div>
+            </div>
+
+            <div class="two-col">
+              <div class="card no-print">
+                <h3>Add Assistance Arrangement</h3>
+                <form id="assistanceForm" onsubmit="handleAddAssistance(event)" style="margin-top:12px;">
+                  <div class="form-group">
+                    <label for="assistRoom">Room Number</label>
+                    <select id="assistRoom" required></select>
+                  </div>
+                  <div class="form-group">
+                    <label for="assistType">Type of Assistance Required</label>
+                    <select id="assistType" required>
+                      <option value="Mobility Support (Wheelchair / Walker)">Mobility Support (Wheelchair / Walker)</option>
+                      <option value="Visual / Hearing Assistance">Visual / Hearing Assistance</option>
+                      <option value="Elderly / Child Escort">Elderly / Child Escort</option>
+                      <option value="Medical Equipment / Oxygen">Medical Equipment / Oxygen</option>
+                      <option value="Other Voluntarily Disclosed Need">Other Voluntarily Disclosed Need</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="assistRole">Responsible Staff Role</label>
+                    <select id="assistRole" required>
+                      <option value="Security / Safety">Security / Designated Safety</option>
+                      <option value="Front Office">Front Office</option>
+                      <option value="Housekeeping">Housekeeping</option>
+                      <option value="Emergency Coordinator">Emergency Coordinator</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="assistNotes">Discreet Coordination Note</label>
+                    <input type="text" id="assistNotes" placeholder="e.g., Coordinate elevator-free exit assistance" />
+                  </div>
+                  <button type="submit" class="btn btn-primary full-width">Save Confidential Entry</button>
+                </form>
+              </div>
+
+              <div class="card">
+                <h3>Restricted Assistance Registry</h3>
+                <div class="table-wrap" style="margin-top:12px;">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Room</th>
+                        <th>Assistance Type</th>
+                        <th>Responsible Role</th>
+                        <th>Status</th>
+                        <th>Notes</th>
+                        <th class="no-print">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody id="assistanceTableBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- =========================================================
+             PAGE 5: QR-CODE LABELS & PRINTABLE STATUS CARDS (Section 5A, 9, 13)
+             ========================================================= -->
+        <section id="qrTab" class="tab-panel">
+          <div class="section-header no-print">
+            <div>
+              <h2>QR-Code Room Labels &amp; Printable Status Cards</h2>
+              <p class="muted">Real scannable QR stickers and cut-out reusable GREEN/YELLOW/RED indicator cards.</p>
+            </div>
+            <div class="filter-bar">
+              <select id="qrMode" onchange="renderQRLabels()" aria-label="QR Code Content Mode">
+                <option value="lan">Mode: Live Wi-Fi Mobile Link</option>
+                <option value="offline">Mode: Offline Room Info Tag</option>
+                <option value="googleform">Mode: Linked Google Form URL</option>
+              </select>
+              <button class="btn btn-primary" onclick="printSection('qr')">Print QR Stickers</button>
+              <button class="btn btn-outline" onclick="printSection('cards')">Print Status Cards</button>
+            </div>
+          </div>
+
+          <div id="lanInfoBox" class="info-box no-print"></div>
+
+          <div id="qrSheet" class="print-qr-keep">
+            <div class="print-only print-header" style="margin:0 0 14px 0;">
+              <h2>SAFE-STAY &mdash; PRINTABLE QR-CODE ROOM LABELS</h2>
+              <p>Cut along dashed lines and place on room doors or the physical monitoring board.</p>
+            </div>
+            <div id="qrGrid" class="qr-grid"></div>
+          </div>
+
+          <div id="statusCardsSheet" class="print-cards-keep" style="margin-top: 24px;">
+            <div class="section-header">
+              <div>
+                <h3>Printable Reusable Room Status Indicator Cards (Section 5A)</h3>
+                <p class="muted">Print, cut, and laminate for physical room-status board backup.</p>
+              </div>
+            </div>
+            <div class="printable-cards-grid">
+              <div class="cut-card cut-GREEN">
+                <div class="cut-badge">GREEN</div>
+                <h4>STATUS VERIFIED</h4>
+                <p>No outstanding concern reported. Continue monitoring and record source/time.</p>
+                <span class="cut-footer">SAFE-STAY &bull; Never enter unsafe areas</span>
+              </div>
+              <div class="cut-card cut-YELLOW">
+                <div class="cut-badge">YELLOW</div>
+                <h4>STATUS PENDING</h4>
+                <p>Not yet verified. Coordinator seeks update through approved response channel.</p>
+                <span class="cut-footer">SAFE-STAY &bull; Never enter unsafe areas</span>
+              </div>
+              <div class="cut-card cut-RED">
+                <div class="cut-badge">RED</div>
+                <h4>UNRESOLVED CONCERN</h4>
+                <p>Urgent communication required. Relay immediately to coordinator/responders.</p>
+                <span class="cut-footer">SAFE-STAY &bull; Do NOT re-enter building</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- =========================================================
+             PAGE 6: INCIDENT ARCHIVES, SETTINGS, STAFF & EVALUATION
+             ========================================================= -->
+        <section id="adminTab" class="tab-panel">
+          <div class="card" style="margin-bottom: 18px;">
+            <h2>Post-Incident Review Archives (Proposal Section 7)</h2>
+            <p class="muted">Preserved records of past emergency activations and drills for management review.</p>
+            <div id="incidentArchivesList" style="margin-top:12px;"></div>
+          </div>
+
+          <div class="two-col">
+            <div class="card">
+              <h2>Hotel &amp; Integration Settings</h2>
+              <p class="muted">Manage establishment details, assembly area, and optional Google Forms/Sheets URLs.</p>
+              <form id="hotelSettingsForm" onsubmit="handleSaveHotelSettings(event)" style="margin-top:12px;">
+                <div class="form-group">
+                  <label for="setHotelName">Establishment Name</label>
+                  <input type="text" id="setHotelName" required />
+                </div>
+                <div class="form-group">
+                  <label for="setHotelAddress">Address / Location</label>
+                  <input type="text" id="setHotelAddress" />
+                </div>
+                <div class="form-group">
+                  <label for="setAssemblyArea">Designated Assembly Area</label>
+                  <input type="text" id="setAssemblyArea" required />
+                </div>
+                <div class="form-group">
+                  <label for="setGoogleForm">Optional Google Form URL</label>
+                  <input type="url" id="setGoogleForm" placeholder="https://docs.google.com/forms/d/..." />
+                </div>
+                <div class="form-group">
+                  <label for="setGoogleSheet">Optional Google Sheet URL</label>
+                  <input type="url" id="setGoogleSheet" placeholder="https://docs.google.com/spreadsheets/d/..." />
+                </div>
+                <button type="submit" class="btn btn-primary">Save Hotel Settings</button>
+              </form>
+
+              <div id="coordinatorDemoBox" class="sub-box hidden">
+                <h3>Classroom Demo Reset</h3>
+                <p class="muted" style="margin-bottom:8px;">Restore the default 3-floor, 10-room, 20-guest scenario (Proposal Section 14).</p>
+                <button type="button" class="btn btn-warning btn-small" onclick="handleResetDemo()">Load 10-Room Classroom Demo</button>
+              </div>
+            </div>
+
+            <div class="card">
+              <h2>Authorized Staff Accounts (Section 8)</h2>
+              <p class="muted">Role-based access control for all 5 hotel emergency roles.</p>
+              <div id="staffManagementArea" style="margin-top:12px;"></div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top: 18px;">
+            <div class="card-header-row">
+              <div>
+                <h2>Evaluation &amp; Readiness Feedback (Proposal Section 15)</h2>
+                <p class="muted">Collect ratings from staff, instructors, or safety reviewers (1 = Needs Work, 5 = Excellent).</p>
+              </div>
+              <button class="btn btn-outline btn-small no-print" onclick="exportEvaluationsCSV()">Export Evaluations CSV</button>
+            </div>
+
+            <form id="evaluationForm" onsubmit="handleSaveEvaluation(event)" style="margin-top: 14px;">
+              <div class="eval-grid">
+                <div class="form-group">
+                  <label for="evalClarity">1. Clarity &mdash; Understand color legend &amp; board at a glance?</label>
+                  <select id="evalClarity"><option value="5">5 - Excellent</option><option value="4">4 - Good</option><option value="3">3 - Fair</option><option value="2">2 - Poor</option><option value="1">1 - Needs Work</option></select>
+                </div>
+                <div class="form-group">
+                  <label for="evalUsability">2. Usability &mdash; Record an update without confusion?</label>
+                  <select id="evalUsability"><option value="5">5 - Excellent</option><option value="4">4 - Good</option><option value="3">3 - Fair</option><option value="2">2 - Poor</option><option value="1">1 - Needs Work</option></select>
+                </div>
+                <div class="form-group">
+                  <label for="evalAccuracy">3. Accuracy &mdash; Room &amp; guest records stay accurate?</label>
+                  <select id="evalAccuracy"><option value="5">5 - Excellent</option><option value="4">4 - Good</option><option value="3">3 - Fair</option><option value="2">2 - Poor</option><option value="1">1 - Needs Work</option></select>
+                </div>
+                <div class="form-group">
+                  <label for="evalCoordination">4. Coordination &mdash; Clear who reports info and to whom?</label>
+                  <select id="evalCoordination"><option value="5">5 - Excellent</option><option value="4">4 - Good</option><option value="3">3 - Fair</option><option value="2">2 - Poor</option><option value="1">1 - Needs Work</option></select>
+                </div>
+                <div class="form-group">
+                  <label for="evalBackup">5. Backup Readiness &mdash; Can continue on paper if offline?</label>
+                  <select id="evalBackup"><option value="5">5 - Excellent</option><option value="4">4 - Good</option><option value="3">3 - Fair</option><option value="2">2 - Poor</option><option value="1">1 - Needs Work</option></select>
+                </div>
+                <div class="form-group">
+                  <label for="evalPrivacy">6. Privacy &amp; Safety &mdash; Sensitive details restricted &amp; unsafe acts prohibited?</label>
+                  <select id="evalPrivacy"><option value="5">5 - Excellent</option><option value="4">4 - Good</option><option value="3">3 - Fair</option><option value="2">2 - Poor</option><option value="1">1 - Needs Work</option></select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="evalReviewer">Reviewer Name / Role (Optional)</label>
+                  <input type="text" id="evalReviewer" placeholder="e.g., Safety Officer, Instructor, Staff" />
+                </div>
+                <div class="form-group">
+                  <label for="evalComment">Comments / Recommendations</label>
+                  <input type="text" id="evalComment" placeholder="Short feedback..." />
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary">Submit Evaluation</button>
+            </form>
+
+            <div id="evaluationSummary" class="eval-summary"></div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- QUICK ROOM UPDATE MODAL -->
+  <div id="quickEditModal" class="modal hidden no-print">
+    <div class="modal-content">
+      <h3 id="quickEditTitle">Update Room</h3>
+      <p class="muted" style="margin-bottom:12px;">Record safe, verified updates only. Never enter hazardous areas.</p>
+      <form onsubmit="handleQuickEditSave(event)">
+        <input type="hidden" id="quickRoomNumber" />
+        <div class="form-group">
+          <label for="quickStatus">Status Category</label>
+          <select id="quickStatus" required>
+            <option value="GREEN">GREEN &ndash; Verified / No Concern</option>
+            <option value="YELLOW">YELLOW &ndash; Pending / Not Verified</option>
+            <option value="RED">RED &ndash; Unresolved / Urgent</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="quickExpected">Registered Guests</label>
+            <input type="number" id="quickExpected" min="0" max="20" required />
+          </div>
+          <div class="form-group">
+            <label for="quickConfirmed">Confirmed at Assembly</label>
+            <input type="number" id="quickConfirmed" min="0" max="20" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="quickNote">Verified Note</label>
+          <textarea id="quickNote" rows="2"></textarea>
+        </div>
+        <div class="modal-actions-spread">
+          <button id="btnDeleteRoom" type="button" class="btn btn-outline btn-small text-red" onclick="deleteCurrentQuickRoom()">Remove Room</button>
+          <div class="modal-actions" style="margin-top:0;">
+            <button type="button" class="btn btn-outline" onclick="closeQuickEditModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Live Update</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ADD ROOM MODAL -->
+  <div id="addRoomModal" class="modal hidden no-print">
+    <div class="modal-content">
+      <h3>Add Room / Zone to Hotel</h3>
+      <form onsubmit="handleAddRoom(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="newRoomFloor">Floor Number</label>
+            <input type="number" id="newRoomFloor" min="1" max="50" value="1" required />
+          </div>
+          <div class="form-group">
+            <label for="newRoomNumber">Room / Zone Number</label>
+            <input type="text" id="newRoomNumber" placeholder="e.g., 105" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="newRoomExpected">Registered Guests</label>
+          <input type="number" id="newRoomExpected" min="0" max="20" value="2" required />
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" onclick="closeAddRoomModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Add Room</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ACTIVATE EMERGENCY MODAL -->
+  <div id="activateModal" class="modal hidden no-print">
+    <div class="modal-content">
+      <h3>Activate Emergency / Evacuation Tracking</h3>
+      <p class="muted" style="margin-bottom:12px;">
+        Follow official alarms and emergency plans first. Activating sets all occupied rooms to YELLOW (pending verification) for live assembly tracking.
+      </p>
+      <form onsubmit="handleActivateIncident(event)">
+        <div class="form-group">
+          <label for="incTitle">Incident / Drill Title</label>
+          <input type="text" id="incTitle" placeholder="e.g., Fire Alarm Evacuation - East Wing" required />
+        </div>
+        <div class="form-group">
+          <label for="incType">Emergency Type</label>
+          <select id="incType">
+            <option value="Fire / Smoke Evacuation">Fire / Smoke Evacuation</option>
+            <option value="Earthquake Evacuation">Earthquake Evacuation</option>
+            <option value="Power Outage / Utility">Power Outage / Utility</option>
+            <option value="Scheduled Safety Drill">Scheduled Safety Drill</option>
+            <option value="Other Emergency">Other Emergency</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="incAssembly">Designated Assembly Area</label>
+          <input type="text" id="incAssembly" required />
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" onclick="closeActivateModal()">Cancel</button>
+          <button type="submit" class="btn btn-danger">Activate Emergency Mode</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- CLOSE & ARCHIVE INCIDENT MODAL -->
+  <div id="closeIncidentModal" class="modal hidden no-print">
+    <div class="modal-content">
+      <h3>Close &amp; Archive Incident</h3>
+      <p class="muted" style="margin-bottom:12px;">
+        Saves a permanent Post-Incident Review record and returns the hotel to Normal Operations mode.
+      </p>
+      <form onsubmit="handleCloseIncident(event)">
+        <div class="form-group">
+          <label for="closeSummaryNote">Post-Incident Summary / Notes</label>
+          <textarea id="closeSummaryNote" rows="3" placeholder="e.g., All guests verified; responders cleared building." required></textarea>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" onclick="closeCloseIncidentModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Archive &amp; Return to Normal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="qrcode.js"></script>
+  <script src="roleDashboards.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
