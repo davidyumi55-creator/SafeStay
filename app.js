@@ -340,6 +340,11 @@ async function handleLogin(event) {
   const errEl = document.getElementById("loginError");
   errEl.textContent = "";
 
+  if (!username || !password) {
+    errEl.textContent = "Please enter both your staff username and password.";
+    return;
+  }
+
   try {
     const res = await api("/api/login", "POST", { username, password });
     onAuthenticated(res.state);
@@ -349,11 +354,20 @@ async function handleLogin(event) {
 }
 
 async function handleLogout() {
+  const ok = await confirmAction({
+    title: "Sign Out of SAFE-STAY?",
+    message: "You will be signed out of this device and will need to sign in again to submit or view live updates.",
+    okText: "Sign Out",
+    okClass: "btn-danger"
+  });
+  if (!ok) return;
+
   try {
     await api("/api/logout", "POST");
   } catch {}
   state = null;
   showLoginScreen();
+  showToast("Signed out safely.");
 }
 
 let activeTabId = "dashboardTab";
@@ -1256,13 +1270,29 @@ function closeQuickEditModal() {
 async function handleQuickEditSave(event) {
   event.preventDefault();
   const roomNum = document.getElementById("quickRoomNumber").value;
-  try {
-    await api(`/api/rooms/${encodeURIComponent(roomNum)}`, "PUT", {
-      status: document.getElementById("quickStatus").value,
-      expected: Number(document.getElementById("quickExpected").value),
-      confirmed: Number(document.getElementById("quickConfirmed").value),
-      note: document.getElementById("quickNote").value.trim()
+  const status = document.getElementById("quickStatus").value;
+  const expected = Number(document.getElementById("quickExpected").value);
+  const confirmed = Number(document.getElementById("quickConfirmed").value);
+  const note = document.getElementById("quickNote").value.trim();
+
+  const countErr = validateRoomCounts(expected, confirmed);
+  if (countErr) return showToast(countErr);
+  if (note.length > 240) return showToast("Note must be 240 characters or fewer.");
+
+  // Safety guardrail: warn if marking GREEN while guests are still unaccounted for
+  if (status === "GREEN" && confirmed < expected) {
+    const missing = expected - confirmed;
+    const proceed = await confirmAction({
+      title: `Mark Room ${roomNum} GREEN with Unaccounted Guests?`,
+      message: `Room ${roomNum} still has ${missing} unaccounted guest(s) (${confirmed}/${expected} confirmed). Are you sure you want to mark it GREEN (Verified)?`,
+      okText: "Yes, Mark GREEN",
+      okClass: "btn-warning"
     });
+    if (!proceed) return;
+  }
+
+  try {
+    await api(`/api/rooms/${encodeURIComponent(roomNum)}`, "PUT", { status, expected, confirmed, note });
     closeQuickEditModal();
     await refreshState();
     showToast(`Room ${roomNum} updated live.`);
@@ -1273,7 +1303,14 @@ async function handleQuickEditSave(event) {
 
 async function deleteCurrentQuickRoom() {
   const roomNum = document.getElementById("quickRoomNumber").value;
-  if (!confirm(`Remove Room ${roomNum} from the hotel board?`)) return;
+  const ok = await confirmAction({
+    title: `Remove Room ${roomNum}?`,
+    message: `This will permanently remove Room ${roomNum} and its occupancy count from the monitoring board.`,
+    okText: "Remove Room",
+    okClass: "btn-danger"
+  });
+  if (!ok) return;
+
   try {
     await api(`/api/rooms/${encodeURIComponent(roomNum)}`, "DELETE");
     closeQuickEditModal();
@@ -1298,13 +1335,29 @@ function prefillUpdateForm() {
 async function handleStatusUpdate(event) {
   event.preventDefault();
   const roomNum = document.getElementById("formRoom").value;
-  try {
-    await api(`/api/rooms/${encodeURIComponent(roomNum)}`, "PUT", {
-      status: document.getElementById("formStatus").value,
-      expected: Number(document.getElementById("formExpected").value),
-      confirmed: Number(document.getElementById("formConfirmed").value),
-      note: document.getElementById("formNote").value.trim()
+  const status = document.getElementById("formStatus").value;
+  const expected = Number(document.getElementById("formExpected").value);
+  const confirmed = Number(document.getElementById("formConfirmed").value);
+  const note = document.getElementById("formNote").value.trim();
+
+  if (!roomNum) return showToast("Please select a room.");
+  const countErr = validateRoomCounts(expected, confirmed);
+  if (countErr) return showToast(countErr);
+  if (note.length > 240) return showToast("Note must be 240 characters or fewer.");
+
+  if (status === "GREEN" && confirmed < expected) {
+    const missing = expected - confirmed;
+    const proceed = await confirmAction({
+      title: `Mark Room ${roomNum} GREEN with Unaccounted Guests?`,
+      message: `Room ${roomNum} still has ${missing} unaccounted guest(s) (${confirmed}/${expected} confirmed). Continue marking as GREEN?`,
+      okText: "Yes, Mark GREEN",
+      okClass: "btn-warning"
     });
+    if (!proceed) return;
+  }
+
+  try {
+    await api(`/api/rooms/${encodeURIComponent(roomNum)}`, "PUT", { status, expected, confirmed, note });
     await refreshState();
     showToast(`Room ${roomNum} update synced across all devices.`);
   } catch (err) {
@@ -1316,7 +1369,8 @@ async function adjustConfirmed(roomNum, change) {
   const room = state.rooms.find(r => r.room === roomNum);
   if (!room) return;
   const nextCount = room.confirmed + change;
-  if (nextCount < 0 || nextCount > room.expected) return;
+  if (nextCount < 0) return showToast("Confirmed count cannot be less than 0.");
+  if (nextCount > room.expected) return showToast(`Room ${roomNum} already has all ${room.expected} guest(s) confirmed.`);
 
   const missing = room.expected - nextCount;
   const nextStatus = missing === 0 ? "GREEN" : "RED";
@@ -1341,6 +1395,15 @@ async function escalateRoom(roomNum) {
   const room = state.rooms.find(r => r.room === roomNum);
   if (!room) return;
   const missing = Math.max(0, room.expected - room.confirmed);
+
+  const ok = await confirmAction({
+    title: `Escalate Room ${roomNum} to RED?`,
+    message: `This will flag Room ${roomNum} as UNRESOLVED (${missing} unaccounted) and immediately alert the Emergency Coordinator and connected staff devices.`,
+    okText: "Escalate to RED",
+    okClass: "btn-danger"
+  });
+  if (!ok) return;
+
   try {
     await api(`/api/rooms/${encodeURIComponent(roomNum)}`, "PUT", {
       status: "RED",
@@ -1358,16 +1421,20 @@ function closeAddRoomModal() { document.getElementById("addRoomModal").classList
 
 async function handleAddRoom(event) {
   event.preventDefault();
+  const floor = Number(document.getElementById("newRoomFloor").value);
+  const room = document.getElementById("newRoomNumber").value.trim();
+  const expected = Number(document.getElementById("newRoomExpected").value);
+
+  if (!Number.isInteger(floor) || floor < 1 || floor > 50) return showToast("Floor must be a whole number between 1 and 50.");
+  if (!/^[a-zA-Z0-9-]{1,12}$/.test(room)) return showToast("Room number must be 1–12 letters, numbers, or dashes (e.g., 105 or 204A).");
+  if (!Number.isInteger(expected) || expected < 0 || expected > 20) return showToast("Registered guests must be between 0 and 20.");
+
   try {
-    await api("/api/rooms", "POST", {
-      floor: Number(document.getElementById("newRoomFloor").value),
-      room: document.getElementById("newRoomNumber").value.trim(),
-      expected: Number(document.getElementById("newRoomExpected").value)
-    });
+    await api("/api/rooms", "POST", { floor, room, expected });
     closeAddRoomModal();
     document.getElementById("newRoomNumber").value = "";
     await refreshState();
-    showToast("Room added to hotel monitoring board.");
+    showToast(`Room ${room} added to Floor ${floor}.`);
   } catch (err) {
     showToast(err.message);
   }
@@ -1382,12 +1449,23 @@ function closeActivateModal() { document.getElementById("activateModal").classLi
 
 async function handleActivateIncident(event) {
   event.preventDefault();
+  const title = document.getElementById("incTitle").value.trim();
+  const type = document.getElementById("incType").value;
+  const assemblyArea = document.getElementById("incAssembly").value.trim();
+
+  if (title.length < 3) return showToast("Incident title must be at least 3 characters.");
+  if (assemblyArea.length < 3) return showToast("Please specify the designated assembly area.");
+
+  const ok = await confirmAction({
+    title: "Activate Emergency Tracking Mode?",
+    message: `Activating "${title}" will reset all occupied rooms to YELLOW (pending verification) and notify all connected staff devices.`,
+    okText: "Activate Emergency",
+    okClass: "btn-danger"
+  });
+  if (!ok) return;
+
   try {
-    await api("/api/incident/activate", "POST", {
-      title: document.getElementById("incTitle").value.trim(),
-      type: document.getElementById("incType").value,
-      assemblyArea: document.getElementById("incAssembly").value.trim()
-    });
+    await api("/api/incident/activate", "POST", { title, type, assemblyArea });
     closeActivateModal();
     await refreshState();
     showToast("Emergency tracking mode activated across all devices.");
@@ -1401,10 +1479,24 @@ function closeCloseIncidentModal() { document.getElementById("closeIncidentModal
 
 async function handleCloseIncident(event) {
   event.preventDefault();
+  const summaryNote = document.getElementById("closeSummaryNote").value.trim();
+  if (summaryNote.length < 5) return showToast("Please enter a brief post-incident summary (at least 5 characters).");
+
+  const redCount = state.rooms.filter(r => r.status === "RED").length;
+  const warning = redCount > 0
+    ? `WARNING: There are still ${redCount} unresolved (RED) room(s). `
+    : "";
+
+  const ok = await confirmAction({
+    title: "Close & Archive This Incident?",
+    message: `${warning}Closing will save a permanent Post-Incident Review record and return the hotel to Normal Operations.`,
+    okText: "Close & Archive",
+    okClass: "btn-warning"
+  });
+  if (!ok) return;
+
   try {
-    await api("/api/incident/close", "POST", {
-      summaryNote: document.getElementById("closeSummaryNote").value.trim()
-    });
+    await api("/api/incident/close", "POST", { summaryNote });
     closeCloseIncidentModal();
     document.getElementById("closeSummaryNote").value = "";
     await refreshState();
@@ -1417,13 +1509,16 @@ async function handleCloseIncident(event) {
 // RESTRICTED ASSISTANCE
 async function handleAddAssistance(event) {
   event.preventDefault();
+  const room = document.getElementById("assistRoom").value;
+  const type = document.getElementById("assistType").value;
+  const role = document.getElementById("assistRole").value;
+  const notes = document.getElementById("assistNotes").value.trim();
+
+  if (!room || !type) return showToast("Please select a room and assistance type.");
+  if (notes.length > 240) return showToast("Coordination notes must be 240 characters or fewer.");
+
   try {
-    await api("/api/assistance", "POST", {
-      room: document.getElementById("assistRoom").value,
-      type: document.getElementById("assistType").value,
-      role: document.getElementById("assistRole").value,
-      notes: document.getElementById("assistNotes").value.trim()
-    });
+    await api("/api/assistance", "POST", { room, type, role, notes });
     document.getElementById("assistNotes").value = "";
     await refreshState();
     showToast("Confidential assistance entry saved.");
@@ -1437,16 +1532,25 @@ async function toggleAssistanceStatus(id, currentStatus) {
   try {
     await api(`/api/assistance/${encodeURIComponent(id)}`, "PUT", { status: nextStatus });
     await refreshState();
+    showToast(`Assistance status updated to ${nextStatus}.`);
   } catch (err) {
     showToast(err.message);
   }
 }
 
 async function deleteAssistance(id) {
-  if (!confirm("Remove this assistance record?")) return;
+  const ok = await confirmAction({
+    title: "Remove Confidential Assistance Entry?",
+    message: "This will permanently delete this guest assistance record from the restricted registry.",
+    okText: "Remove Entry",
+    okClass: "btn-danger"
+  });
+  if (!ok) return;
+
   try {
     await api(`/api/assistance/${encodeURIComponent(id)}`, "DELETE");
     await refreshState();
+    showToast("Assistance entry removed.");
   } catch (err) {
     showToast(err.message);
   }
@@ -1464,14 +1568,19 @@ function populateHotelSettingsForm() {
 
 async function handleSaveHotelSettings(event) {
   event.preventDefault();
+  const name = document.getElementById("setHotelName").value.trim();
+  const address = document.getElementById("setHotelAddress").value.trim();
+  const assemblyArea = document.getElementById("setAssemblyArea").value.trim();
+  const googleFormUrl = document.getElementById("setGoogleForm").value.trim();
+  const googleSheetUrl = document.getElementById("setGoogleSheet").value.trim();
+
+  if (name.length < 2) return showToast("Establishment name must be at least 2 characters.");
+  if (assemblyArea.length < 3) return showToast("Please enter a valid designated assembly area.");
+  if (!isValidOptionalUrl(googleFormUrl)) return showToast("Google Form URL must start with http:// or https://");
+  if (!isValidOptionalUrl(googleSheetUrl)) return showToast("Google Sheet URL must start with http:// or https://");
+
   try {
-    await api("/api/hotel", "PUT", {
-      name: document.getElementById("setHotelName").value.trim(),
-      address: document.getElementById("setHotelAddress").value.trim(),
-      assemblyArea: document.getElementById("setAssemblyArea").value.trim(),
-      googleFormUrl: document.getElementById("setGoogleForm").value.trim(),
-      googleSheetUrl: document.getElementById("setGoogleSheet").value.trim()
-    });
+    await api("/api/hotel", "PUT", { name, address, assemblyArea, googleFormUrl, googleSheetUrl });
     await refreshState();
     showToast("Hotel settings saved.");
   } catch (err) {
@@ -1482,7 +1591,7 @@ async function handleSaveHotelSettings(event) {
 function openExternalLink(type) {
   const url = type === "form" ? state.hotel.googleFormUrl : state.hotel.googleSheetUrl;
   if (!url) {
-    showToast(`Add your Google ${type === "form" ? "Form" : "Sheet"} URL in Tab 6 (Settings) first.`);
+    showToast(`Add your Google ${type === "form" ? "Form" : "Sheet"} URL in Settings first.`);
     return;
   }
   window.open(url, "_blank", "noopener,noreferrer");
@@ -1490,26 +1599,39 @@ function openExternalLink(type) {
 
 async function handleAddStaffUser(event) {
   event.preventDefault();
+  const username = document.getElementById("newStaffUser").value.trim().toLowerCase();
+  const name = document.getElementById("newStaffName").value.trim();
+  const role = document.getElementById("newStaffRole").value;
+  const password = document.getElementById("newStaffPass").value;
+
+  if (!/^[a-z0-9_-]{3,24}$/.test(username)) {
+    return showToast("Username must be 3–24 characters (letters, numbers, _ or - only).");
+  }
+  if (name.length < 2) return showToast("Please enter the staff member's full name.");
+  if (password.length < 4) return showToast("Password must be at least 4 characters.");
+
   try {
-    await api("/api/users", "POST", {
-      username: document.getElementById("newStaffUser").value.trim(),
-      name: document.getElementById("newStaffName").value.trim(),
-      role: document.getElementById("newStaffRole").value,
-      password: document.getElementById("newStaffPass").value
-    });
+    await api("/api/users", "POST", { username, name, role, password });
     await refreshState();
-    showToast("New staff account created.");
+    showToast(`Staff account "${username}" created.`);
   } catch (err) {
     showToast(err.message);
   }
 }
 
 async function deleteStaffUser(username) {
-  if (!confirm(`Remove staff account "${username}"?`)) return;
+  const ok = await confirmAction({
+    title: `Remove Staff Account "${username}"?`,
+    message: `This user will immediately lose access to SAFE-STAY. This action cannot be undone.`,
+    okText: "Remove Account",
+    okClass: "btn-danger"
+  });
+  if (!ok) return;
+
   try {
     await api(`/api/users/${encodeURIComponent(username)}`, "DELETE");
     await refreshState();
-    showToast("Staff account removed.");
+    showToast(`Staff account "${username}" removed.`);
   } catch (err) {
     showToast(err.message);
   }
@@ -1517,6 +1639,9 @@ async function deleteStaffUser(username) {
 
 async function handleSaveEvaluation(event) {
   event.preventDefault();
+  const comment = document.getElementById("evalComment").value.trim();
+  if (comment.length > 300) return showToast("Comment must be 300 characters or fewer.");
+
   try {
     await api("/api/evaluations", "POST", {
       reviewer: document.getElementById("evalReviewer").value.trim(),
@@ -1526,7 +1651,7 @@ async function handleSaveEvaluation(event) {
       coordination: Number(document.getElementById("evalCoordination").value),
       backup: Number(document.getElementById("evalBackup").value),
       privacy: Number(document.getElementById("evalPrivacy").value),
-      comment: document.getElementById("evalComment").value.trim()
+      comment
     });
     document.getElementById("evalReviewer").value = "";
     document.getElementById("evalComment").value = "";
@@ -1538,7 +1663,14 @@ async function handleSaveEvaluation(event) {
 }
 
 async function handleResetDemo() {
-  if (!confirm("Load the 10-room, 20-guest classroom demonstration scenario?")) return;
+  const ok = await confirmAction({
+    title: "Load 10-Room Classroom Demo?",
+    message: "This will reset all current rooms, guest counts, and logs back to the default 3-floor, 10-room, 20-guest demonstration scenario.",
+    okText: "Reset to Demo",
+    okClass: "btn-warning"
+  });
+  if (!ok) return;
+
   try {
     await api("/api/reset-demo", "POST");
     await refreshState();
@@ -1546,6 +1678,65 @@ async function handleResetDemo() {
     showToast("Classroom demo scenario loaded.");
   } catch (err) {
     showToast(err.message);
+  }
+}
+
+// =========================================================
+// REUSABLE CONFIRMATION DIALOG & VALIDATION HELPERS
+// =========================================================
+
+function confirmAction({ title, message, okText = "Confirm", okClass = "btn-danger" }) {
+  return new Promise(resolve => {
+    const modal = document.getElementById("confirmModal");
+    const titleEl = document.getElementById("confirmTitle");
+    const msgEl = document.getElementById("confirmMessage");
+    const okBtn = document.getElementById("confirmOkBtn");
+    const cancelBtn = document.getElementById("confirmCancelBtn");
+
+    titleEl.textContent = title || "Confirm Action";
+    msgEl.textContent = message || "Are you sure you want to proceed?";
+    okBtn.textContent = okText;
+    okBtn.className = `btn ${okClass}`;
+    modal.classList.remove("hidden");
+
+    const cleanup = result => {
+      modal.classList.add("hidden");
+      okBtn.onclick = null;
+      cancelBtn.onclick = null;
+      document.removeEventListener("keydown", onKey);
+      resolve(result);
+    };
+
+    const onKey = e => {
+      if (e.key === "Escape") cleanup(false);
+    };
+
+    okBtn.onclick = () => cleanup(true);
+    cancelBtn.onclick = () => cleanup(false);
+    document.addEventListener("keydown", onKey);
+  });
+}
+
+function validateRoomCounts(expected, confirmed) {
+  if (!Number.isInteger(expected) || expected < 0 || expected > 20) {
+    return "Registered occupants must be a whole number between 0 and 20.";
+  }
+  if (!Number.isInteger(confirmed) || confirmed < 0 || confirmed > 20) {
+    return "Confirmed guests must be a whole number between 0 and 20.";
+  }
+  if (confirmed > expected) {
+    return `Confirmed guests (${confirmed}) cannot exceed registered occupants (${expected}).`;
+  }
+  return null;
+}
+
+function isValidOptionalUrl(url) {
+  if (!url) return true;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
   }
 }
 

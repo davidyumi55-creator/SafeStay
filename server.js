@@ -414,11 +414,17 @@ async function handleAPI(req, res, pathname) {
     const body = await readJSONBody(req);
     const floor = Number(body.floor);
     const roomNum = String(body.room || "").trim();
-    const expected = Math.max(0, Number(body.expected) || 0);
+    const expected = Number(body.expected);
     const occupied = expected > 0;
 
-    if (!roomNum || isNaN(floor)) {
-      return sendJSON(res, 400, { error: "Valid floor and room number are required." });
+    if (!Number.isInteger(floor) || floor < 1 || floor > 50) {
+      return sendJSON(res, 400, { error: "Floor must be a whole number between 1 and 50." });
+    }
+    if (!/^[a-zA-Z0-9-]{1,12}$/.test(roomNum)) {
+      return sendJSON(res, 400, { error: "Room number must be 1-12 letters, numbers, or dashes." });
+    }
+    if (!Number.isInteger(expected) || expected < 0 || expected > 20) {
+      return sendJSON(res, 400, { error: "Registered occupants must be a whole number between 0 and 20." });
     }
     if (db.rooms.some(r => r.room.toLowerCase() === roomNum.toLowerCase())) {
       return sendJSON(res, 409, { error: `Room ${roomNum} already exists.` });
@@ -451,18 +457,24 @@ async function handleAPI(req, res, pathname) {
     if (!room) return sendJSON(res, 404, { error: "Room not found." });
 
     const body = await readJSONBody(req);
-    if (body.expected !== undefined) {
-      room.expected = Math.max(0, Number(body.expected));
-      room.occupied = room.expected > 0;
+    const nextExpected = body.expected !== undefined ? Number(body.expected) : room.expected;
+    const nextConfirmed = body.confirmed !== undefined ? Number(body.confirmed) : room.confirmed;
+
+    if (!Number.isInteger(nextExpected) || nextExpected < 0 || nextExpected > 20) {
+      return sendJSON(res, 400, { error: "Registered occupants must be a whole number between 0 and 20." });
     }
-    if (body.confirmed !== undefined) {
-      room.confirmed = Math.max(0, Number(body.confirmed));
+    if (!Number.isInteger(nextConfirmed) || nextConfirmed < 0 || nextConfirmed > nextExpected) {
+      return sendJSON(res, 400, { error: `Confirmed guests (${nextConfirmed}) cannot exceed registered occupants (${nextExpected}).` });
     }
+
+    room.expected = nextExpected;
+    room.occupied = nextExpected > 0;
+    room.confirmed = nextConfirmed;
     if (body.status && ["GREEN", "YELLOW", "RED"].includes(body.status)) {
       room.status = body.status;
     }
     if (body.note !== undefined) {
-      room.note = String(body.note).trim() || "Status updated";
+      room.note = String(body.note).trim().slice(0, 240) || "Status updated";
     }
 
     room.role = user.role;
@@ -658,8 +670,11 @@ async function handleAPI(req, res, pathname) {
     const name = String(body.name || "").trim();
     const role = String(body.role || "").trim();
     const password = String(body.password || "");
-    if (!username || !name || !role || password.length < 4) {
-      return sendJSON(res, 400, { error: "Username, name, role, and password (4+ chars) are required." });
+    if (!/^[a-z0-9_-]{3,24}$/.test(username)) {
+      return sendJSON(res, 400, { error: "Username must be 3-24 characters (letters, numbers, _ or - only)." });
+    }
+    if (name.length < 2 || !Object.values(ROLES).includes(role) || password.length < 4) {
+      return sendJSON(res, 400, { error: "Valid name, department role, and password (4+ chars) are required." });
     }
     if (db.users.some(u => u.username.toLowerCase() === username)) {
       return sendJSON(res, 409, { error: "Username already exists." });
