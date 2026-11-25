@@ -662,13 +662,14 @@ async function handleAPI(req, res, pathname) {
     return sendJSON(res, 200, { ok: true, hotel: db.hotel });
   }
 
-  // --- STAFF ACCOUNT MANAGEMENT ---
+  // --- STAFF ACCOUNT MANAGEMENT (Admin / Emergency Coordinator Only) ---
   if (pathname === "/api/users" && method === "POST") {
-    if (user.role !== ROLES.COORDINATOR) return sendJSON(res, 403, { error: "Only Emergency Coordinator can manage staff accounts." });
+    if (user.role !== ROLES.COORDINATOR) return sendJSON(res, 403, { error: "Only Admin (Emergency Coordinator) can manage staff accounts." });
     const body = await readJSONBody(req);
     const username = String(body.username || "").trim().toLowerCase();
     const name = String(body.name || "").trim();
     const role = String(body.role || "").trim();
+    const staffId = String(body.staffId || "").trim() || username.toUpperCase();
     const password = String(body.password || "");
     if (!/^[a-z0-9_-]{3,24}$/.test(username)) {
       return sendJSON(res, 400, { error: "Username must be 3-24 characters (letters, numbers, _ or - only)." });
@@ -679,14 +680,45 @@ async function handleAPI(req, res, pathname) {
     if (db.users.some(u => u.username.toLowerCase() === username)) {
       return sendJSON(res, 409, { error: "Username already exists." });
     }
-    db.users.push({ username, name, role, staffId: username.toUpperCase(), passwordHash: hashPassword(password) });
+    db.users.push({ username, name, role, staffId: staffId.slice(0, 16), passwordHash: hashPassword(password) });
     await persistDB();
     broadcastUpdate();
     return sendJSON(res, 201, { ok: true });
   }
 
+  if (pathname.startsWith("/api/users/") && method === "PUT") {
+    if (user.role !== ROLES.COORDINATOR) return sendJSON(res, 403, { error: "Only Admin (Emergency Coordinator) can edit staff accounts." });
+    const targetUsername = decodeURIComponent(pathname.slice("/api/users/".length)).toLowerCase();
+    const target = db.users.find(u => u.username.toLowerCase() === targetUsername);
+    if (!target) return sendJSON(res, 404, { error: "Staff account not found." });
+
+    const body = await readJSONBody(req);
+    const name = String(body.name || "").trim();
+    const role = String(body.role || "").trim();
+    const staffId = String(body.staffId || "").trim();
+    const newPassword = String(body.password || "");
+
+    if (name.length < 2) return sendJSON(res, 400, { error: "Full name must be at least 2 characters." });
+    if (!Object.values(ROLES).includes(role)) return sendJSON(res, 400, { error: "Invalid department role." });
+    if (targetUsername === user.username.toLowerCase() && role !== ROLES.COORDINATOR) {
+      return sendJSON(res, 400, { error: "You cannot demote your own active Admin account." });
+    }
+    if (newPassword && newPassword.length < 4) {
+      return sendJSON(res, 400, { error: "New password must be at least 4 characters." });
+    }
+
+    target.name = name;
+    target.role = role;
+    if (staffId) target.staffId = staffId.slice(0, 16);
+    if (newPassword) target.passwordHash = hashPassword(newPassword);
+
+    await persistDB();
+    broadcastUpdate();
+    return sendJSON(res, 200, { ok: true });
+  }
+
   if (pathname.startsWith("/api/users/") && method === "DELETE") {
-    if (user.role !== ROLES.COORDINATOR) return sendJSON(res, 403, { error: "Only Emergency Coordinator can remove staff accounts." });
+    if (user.role !== ROLES.COORDINATOR) return sendJSON(res, 403, { error: "Only Admin (Emergency Coordinator) can remove staff accounts." });
     const targetUsername = decodeURIComponent(pathname.slice("/api/users/".length)).toLowerCase();
     if (targetUsername === user.username.toLowerCase()) return sendJSON(res, 400, { error: "Cannot delete your own active account." });
     db.users = db.users.filter(u => u.username.toLowerCase() !== targetUsername);

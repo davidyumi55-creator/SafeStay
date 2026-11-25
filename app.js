@@ -246,12 +246,27 @@ function localApi(url, method = "GET", body = {}) {
   }
 
   if (url === "/api/users" && method === "POST") {
-    db.users.push({ username: body.username.toLowerCase(), name: body.name, role: body.role, staffId: body.username.toUpperCase(), password: body.password });
+    if (user.role !== "Emergency Coordinator") throw new Error("Only Admin can manage staff accounts.");
+    db.users.push({ username: body.username.toLowerCase(), name: body.name, role: body.role, staffId: (body.staffId || body.username).toUpperCase(), password: body.password });
+    saveLocalDB(db);
+    return { ok: true };
+  }
+
+  if (url.startsWith("/api/users/") && method === "PUT") {
+    if (user.role !== "Emergency Coordinator") throw new Error("Only Admin can edit staff accounts.");
+    const u = decodeURIComponent(url.slice("/api/users/".length)).toLowerCase();
+    const target = db.users.find(x => x.username.toLowerCase() === u);
+    if (!target) throw new Error("Staff account not found.");
+    if (body.name) target.name = body.name;
+    if (body.role) target.role = body.role;
+    if (body.staffId) target.staffId = body.staffId;
+    if (body.password) target.password = body.password;
     saveLocalDB(db);
     return { ok: true };
   }
 
   if (url.startsWith("/api/users/") && method === "DELETE") {
+    if (user.role !== "Emergency Coordinator") throw new Error("Only Admin can remove staff accounts.");
     const u = decodeURIComponent(url.slice("/api/users/".length)).toLowerCase();
     db.users = db.users.filter(x => x.username.toLowerCase() !== u);
     saveLocalDB(db);
@@ -995,27 +1010,28 @@ function renderIncidentArchives() {
 function renderStaffManagement() {
   const box = document.getElementById("staffManagementArea");
   if (!state.user.canAdmin || !state.users) {
-    box.innerHTML = `<p class="muted">Only the <strong>Emergency Coordinator</strong> can add or remove staff accounts.</p>`;
+    box.innerHTML = `<p class="muted"><strong>Admin Only:</strong> Only the <strong>Emergency Coordinator (Admin)</strong> can view, edit, add, or remove staff accounts.</p>`;
     return;
   }
 
   box.innerHTML = `
     <div class="table-wrap" style="margin-bottom:14px;">
-      <table>
+      <table style="min-width:520px;">
         <thead>
-          <tr><th>Username</th><th>Name</th><th>Role</th><th>ID</th><th></th></tr>
+          <tr><th>Username</th><th>Full Name</th><th>Role</th><th>Staff ID</th><th>Actions</th></tr>
         </thead>
         <tbody>
           ${state.users.map(u => `
             <tr>
               <td><code>${escapeHTML(u.username)}</code></td>
-              <td>${escapeHTML(u.name)}</td>
+              <td><strong>${escapeHTML(u.name)}</strong></td>
               <td>${escapeHTML(u.role)}</td>
               <td>${escapeHTML(u.staffId)}</td>
               <td>
+                <button class="btn btn-outline btn-small" onclick="openEditStaffModal('${escapeHTML(u.username)}')">Edit</button>
                 ${u.username !== state.user.username
                   ? `<button class="btn btn-outline btn-small text-red" onclick="deleteStaffUser('${escapeHTML(u.username)}')">Remove</button>`
-                  : `<span class="muted">You</span>`}
+                  : `<span class="muted" style="font-size:0.78rem;">(You)</span>`}
               </td>
             </tr>
           `).join("")}
@@ -1035,14 +1051,82 @@ function renderStaffManagement() {
             <option value="Housekeeping">Housekeeping</option>
             <option value="Security / Safety">Security / Safety</option>
             <option value="Assembly-Area Team">Assembly-Area Team</option>
-            <option value="Emergency Coordinator">Emergency Coordinator</option>
+            <option value="Emergency Coordinator">Emergency Coordinator (Admin)</option>
           </select>
         </div>
-        <div class="form-group"><label>Staff ID &amp; Password</label><input id="newStaffPass" type="password" required placeholder="Min 4 chars" /></div>
+        <div class="form-group">
+          <label>Password</label>
+          <div class="password-wrap">
+            <input id="newStaffPass" type="password" required placeholder="Min 4 chars" autocomplete="new-password" />
+            <button type="button" class="eye-btn" onclick="togglePasswordVisibility('newStaffPass', this)" aria-label="Show password">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
       </div>
-      <button type="submit" class="btn btn-primary btn-small">Add Authorized Staff Account</button>
+      <button type="submit" class="btn btn-primary btn-small">+ Add Authorized Staff Account</button>
     </form>
   `;
+}
+
+function openEditStaffModal(username) {
+  if (!state || !state.users) return;
+  const target = state.users.find(u => u.username === username);
+  if (!target) return;
+
+  document.getElementById("editStaffTitle").textContent = `Edit Staff Account: ${target.username}`;
+  document.getElementById("editStaffUsername").value = target.username;
+  document.getElementById("editStaffName").value = target.name;
+  document.getElementById("editStaffId").value = target.staffId || "";
+  document.getElementById("editStaffRole").value = target.role;
+  document.getElementById("editStaffPass").value = "";
+  document.getElementById("editStaffPass").type = "password";
+  document.getElementById("editStaffModal").classList.remove("hidden");
+}
+
+function closeEditStaffModal() {
+  document.getElementById("editStaffModal").classList.add("hidden");
+}
+
+async function handleEditStaffSave(event) {
+  event.preventDefault();
+  const username = document.getElementById("editStaffUsername").value;
+  const name = document.getElementById("editStaffName").value.trim();
+  const staffId = document.getElementById("editStaffId").value.trim();
+  const role = document.getElementById("editStaffRole").value;
+  const password = document.getElementById("editStaffPass").value;
+
+  if (name.length < 2) return showToast("Full name must be at least 2 characters.");
+  if (!staffId) return showToast("Staff ID is required.");
+  if (password && password.length < 4) return showToast("New password must be at least 4 characters.");
+
+  const ok = await confirmAction({
+    title: `Save Changes for "${username}"?`,
+    message: `Update staff info for ${name} (${role})${password ? " and reset their password" : ""}?`,
+    okText: "Save Changes",
+    okClass: "btn-primary"
+  });
+  if (!ok) return;
+
+  try {
+    await api(`/api/users/${encodeURIComponent(username)}`, "PUT", { name, staffId, role, password });
+    closeEditStaffModal();
+    await refreshState();
+    showToast(`Staff account "${username}" updated.`);
+  } catch (err) {
+    showToast(err.message);
+  }
+}
+
+function togglePasswordVisibility(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const showing = input.type === "text";
+  input.type = showing ? "password" : "text";
+  btn.setAttribute("aria-label", showing ? "Show password" : "Hide password");
+  btn.innerHTML = showing
+    ? `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`
+    : `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
 }
 
 function renderEvaluationSummary() {

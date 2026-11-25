@@ -35,7 +35,12 @@
         </div>
         <div class="form-group">
           <label for="loginPassword">Password</label>
-          <input type="password" id="loginPassword" placeholder="Enter password" required autocomplete="current-password" />
+          <div class="password-wrap">
+            <input type="password" id="loginPassword" placeholder="Enter password" required autocomplete="current-password" />
+            <button type="button" class="eye-btn" onclick="togglePasswordVisibility('loginPassword', this)" aria-label="Show password" title="Show / Hide Password">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
         </div>
         <p id="loginError" class="text-red small-text"></p>
         <button type="submit" class="btn btn-primary full-width" style="margin-top:8px;">Sign In to SAFE-STAY</button>
@@ -731,6 +736,50 @@
 
   <!-- MOBILE THUMB-FRIENDLY BOTTOM NAVIGATION (Phones <= 768px) -->
   <nav id="mobileBottomNav" class="mobile-bottom-nav hidden no-print"></nav>
+
+  <!-- EDIT STAFF ACCOUNT MODAL (Admin / Emergency Coordinator Only) -->
+  <div id="editStaffModal" class="modal hidden no-print">
+    <div class="modal-content">
+      <h3 id="editStaffTitle">Edit Staff Account</h3>
+      <p class="muted" style="margin-bottom:12px;">Admin only. Update staff details, department role, or reset their password.</p>
+      <form onsubmit="handleEditStaffSave(event)">
+        <input type="hidden" id="editStaffUsername" />
+        <div class="form-row">
+          <div class="form-group">
+            <label for="editStaffName">Full Name</label>
+            <input type="text" id="editStaffName" required />
+          </div>
+          <div class="form-group">
+            <label for="editStaffId">Staff ID</label>
+            <input type="text" id="editStaffId" placeholder="e.g., FO-02" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="editStaffRole">Department Role</label>
+          <select id="editStaffRole" required>
+            <option value="Front Office">Front Office</option>
+            <option value="Housekeeping">Housekeeping</option>
+            <option value="Security / Safety">Security / Safety</option>
+            <option value="Assembly-Area Team">Assembly-Area Team</option>
+            <option value="Emergency Coordinator">Emergency Coordinator (Admin)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="editStaffPass">New Password (Leave blank to keep current)</label>
+          <div class="password-wrap">
+            <input type="password" id="editStaffPass" placeholder="Min 4 characters (optional)" autocomplete="new-password" />
+            <button type="button" class="eye-btn" onclick="togglePasswordVisibility('editStaffPass', this)" aria-label="Show password" title="Show / Hide Password">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" onclick="closeEditStaffModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Staff Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <!-- REUSABLE CONFIRMATION DIALOG MODAL -->
   <div id="confirmModal" class="modal hidden no-print" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
